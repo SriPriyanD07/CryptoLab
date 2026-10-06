@@ -160,17 +160,16 @@ CryptoLab/
 │   ├── package.json                # Dependencies & npm scripts
 │   ├── tsconfig.json               # Strict TypeScript configuration
 │   └── vite.config.ts              # Vite bundling configuration
-├── app.py                          # Streamlit application entry point
-├── requirements.txt                # Python backend dependencies
+├── requirements.txt                # Python backend reference dependencies
 ├── .gitignore                      # Git exclusion rules
 └── README.md                       # Workstation documentation
 ```
 
 ### Cryptographic Separation of Concerns
 
-* **Frontend Workstation**: Runs standard, hardware-accelerated **Web Crypto API (`window.crypto.subtle`)** for NIST P-256 ECDH, ECDSA signatures, AES-256-GCM, and SHA-256. Foundational ring arithmetic and educational RSA utilize a custom, zero-dependency **BigInt** engine.
-* **Python Engine**: Provides reference implementations utilizing **PyCA `cryptography`** backed by OpenSSL, along with a standalone simulation engine in `simulations/`.
-* **Automated Tests**: Pytest suite validates all mathematical operations, RFC specifications, attack rejections, and failure conditions.
+* **Frontend Research Workstation (`frontend/`)**: The active user-facing workstation built on **React 19 + TypeScript + Vite**. Executes hardware-accelerated **Web Crypto API (`window.crypto.subtle`)** for NIST P-256 ECDH, ECDSA signatures, AES-256-GCM authenticated encryption, and SHA-256 hashing. Foundational ring arithmetic and educational RSA utilize a custom arbitrary-precision **BigInt** engine.
+* **Python Reference Engine & Verification (`crypto/`, `simulations/`, `tests/`)**: Provides standalone backend reference cryptographic implementations utilizing standard **PyCA `cryptography`** backed by OpenSSL, end-to-end transport simulations in `simulations/`, and automated regression test coverage in `tests/`.
+* **Automated Tests**: Pytest suite validates all mathematical operations, RFC specifications, attack rejections, and failure conditions independently.
 
 ---
 
