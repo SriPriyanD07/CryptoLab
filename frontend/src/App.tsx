@@ -16,7 +16,7 @@ import { SecureChannelWorkbench } from './features/secureChannel/SecureChannelWo
 import { TamperingWorkbench } from './features/tampering/TamperingWorkbench';
 
 export function App() {
-  const [activeModule, setActiveModule] = useState<ActiveModule>('dh');
+  const [activeModule, setActiveModule] = useState<ActiveModule>('overview');
   const [resetCounter, setResetCounter] = useState<number>(0);
 
   const handleReset = () => {
@@ -24,7 +24,7 @@ export function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg-base text-slate-100 font-sans">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050607] text-[#e6e7e9] font-sans">
       {/* Persistent Left Sidebar */}
       <Sidebar
         activeModule={activeModule}
@@ -40,8 +40,8 @@ export function App() {
         />
 
         {/* Scrollable Workbench Workspace */}
-        <main className="flex-1 overflow-y-auto p-5 bg-[#090d16]">
-          <div key={`${activeModule}-${resetCounter}`} className="max-w-6xl mx-auto pb-10">
+        <main className="flex-1 overflow-y-auto p-3 bg-[#050607]">
+          <div key={`${activeModule}-${resetCounter}`} className="w-full max-w-[1560px] mx-auto pb-6">
             {activeModule === 'overview' && (
               <OverviewWorkbench onNavigate={(mod) => setActiveModule(mod)} />
             )}

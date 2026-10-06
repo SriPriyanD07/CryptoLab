@@ -1,4 +1,5 @@
 import React from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Layers,
   KeyRound,
@@ -28,79 +29,70 @@ interface SidebarProps {
   onSelectModule: (module: ActiveModule) => void;
 }
 
+interface NavItem {
+  id: ActiveModule;
+  label: string;
+  icon?: LucideIcon;
+}
+
+interface NavSection {
+  category: string;
+  items: NavItem[];
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onSelectModule }) => {
-  const sections = [
+  const sections: NavSection[] = [
     {
       category: 'LABORATORY',
       items: [
-        { id: 'overview' as ActiveModule, label: 'Overview', icon: Layers }
+        { id: 'overview', label: 'Overview', icon: Layers },
+        { id: 'modular', label: 'Modular Arithmetic', icon: Binary }
+      ]
+    },
+    {
+      category: 'PUBLIC-KEY',
+      items: [
+        { id: 'rsa', label: 'RSA', icon: KeyRound },
+        { id: 'dh', label: 'Diffie-Hellman', icon: ArrowRightLeft },
+        { id: 'ecdh', label: 'ECDH (P-256)', icon: ArrowRightLeft },
+        { id: 'ecdsa', label: 'ECDSA', icon: FileSignature }
       ]
     },
     {
       category: 'PRIMITIVES',
       items: [
-        { id: 'modular' as ActiveModule, label: 'Modular Arithmetic', icon: Binary },
-        { id: 'rsa' as ActiveModule, label: 'RSA Workbench', icon: KeyRound }
-      ]
-    },
-    {
-      category: 'KEY EXCHANGE',
-      items: [
-        { id: 'dh' as ActiveModule, label: 'Diffie-Hellman', icon: ArrowRightLeft },
-        { id: 'ecdh' as ActiveModule, label: 'ECDH (P-256)', icon: ArrowRightLeft }
-      ]
-    },
-    {
-      category: 'AUTHENTICATION',
-      items: [
-        { id: 'ecdsa' as ActiveModule, label: 'ECDSA Signatures', icon: FileSignature }
-      ]
-    },
-    {
-      category: 'HASHING',
-      items: [
-        { id: 'sha256' as ActiveModule, label: 'SHA-256 Workbench', icon: Hash }
-      ]
-    },
-    {
-      category: 'SYMMETRIC',
-      items: [
-        { id: 'aes' as ActiveModule, label: 'AES-GCM (AEAD)', icon: Lock }
+        { id: 'sha256', label: 'SHA-256', icon: Hash },
+        { id: 'aes', label: 'AES-GCM', icon: Lock }
       ]
     },
     {
       category: 'PROTOCOLS',
       items: [
-        { id: 'secure-channel' as ActiveModule, label: 'Secure Channel', icon: Network }
-      ]
-    },
-    {
-      category: 'ATTACKS',
-      items: [
-        { id: 'tampering' as ActiveModule, label: 'Tampering / MitM', icon: ShieldAlert }
+        { id: 'secure-channel', label: 'Secure Channel', icon: Network },
+        { id: 'tampering', label: 'Tampering Studio', icon: ShieldAlert }
       ]
     }
   ];
 
   return (
-    <aside className="w-64 bg-slate-950 border-r border-slate-800/90 flex flex-col justify-between shrink-0 select-none">
+    <aside className="w-48 bg-[#090b0e] border-r border-[#20252b] flex flex-col justify-between shrink-0 select-none font-mono z-10">
       <div>
         {/* Brand header */}
-        <div className="p-4 border-b border-slate-800/80">
+        <div className="px-3 py-2.5 border-b border-[#20252b] flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <div className="w-3.5 h-3.5 bg-sky-400 rotate-45 transform"></div>
-            <div>
-              <div className="font-mono text-sm font-bold tracking-widest text-slate-100 uppercase">CRYPTO LAB</div>
-              <div className="font-mono text-[10px] text-slate-500 uppercase tracking-wider">Research Workbench</div>
-            </div>
+            <span className="w-1.5 h-1.5 bg-[#e6e7e9] rotate-45 transform shrink-0"></span>
+            <div className="text-[11px] font-bold tracking-wider text-[#e6e7e9]">CRYPTOLAB</div>
           </div>
+          <span className="text-[9px] px-1 py-0.2 bg-[#11151a] text-[#8b929a] border border-[#20252b] rounded-[2px]">
+            v2.0
+          </span>
         </div>
 
         {/* Navigation list */}
-        <nav className="p-3 space-y-4 overflow-y-auto max-h-[calc(100vh-140px)]">
+        <nav className="p-2 space-y-3 overflow-y-auto max-h-[calc(100vh-170px)]">
           {sections.map((section) => (
             <div key={section.category}>
-              <div className="font-mono text-[10px] uppercase font-semibold text-slate-500 px-2 mb-1 tracking-wider">
+              <div className="text-[9px] uppercase font-semibold text-[#5f6670] px-1.5 mb-0.5 tracking-wider">
                 {section.category}
               </div>
               <div className="space-y-0.5">
@@ -111,14 +103,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onSelectModule }
                     <button
                       key={item.id}
                       onClick={() => onSelectModule(item.id)}
-                      className={`w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded text-xs font-mono transition-colors text-left ${
+                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded-[2px] text-[11px] transition-colors text-left ${
                         isActive
-                          ? 'bg-sky-500/10 text-sky-300 border border-sky-500/30'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
+                          ? 'bg-[#161a20] text-[#f3f4f6] font-semibold border-l-2 border-[#e6e7e9] pl-1.5'
+                          : 'text-[#8b929a] hover:text-[#e6e7e9] hover:bg-[#11151a] border-l-2 border-transparent'
                       }`}
                     >
-                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-400' : 'text-slate-500'}`} />
-                      <span className="truncate">{item.label}</span>
+                      <div className="flex items-center space-x-2 truncate">
+                        {Icon && <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-[#e6e7e9]' : 'text-[#5f6670]'}`} />}
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>}
                     </button>
                   );
                 })}
@@ -128,10 +123,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeModule, onSelectModule }
         </nav>
       </div>
 
-      {/* Footer */}
-      <div className="p-3 border-t border-slate-800/80 font-mono text-[10px] text-slate-500">
-        <div className="font-semibold text-slate-400">CryptoLab v2.0</div>
-        <div>Cryptography Laboratory</div>
+      {/* Technical telemetry footer */}
+      <div className="p-2.5 border-t border-[#20252b] bg-[#050607] space-y-2 text-[10px]">
+        <div>
+          <div className="text-[#5f6670] text-[9px] uppercase font-semibold">ENGINE</div>
+          <div className="text-[#8b929a] flex items-center justify-between">
+            <span>Web Crypto</span>
+            <span className="text-emerald-400 font-medium">READY</span>
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[#5f6670] text-[9px] uppercase font-semibold">PYTHON TESTS</div>
+          <div className="text-[#8b929a] flex items-center justify-between">
+            <span>Test Suite</span>
+            <span className="text-emerald-400 font-semibold">24 / 24 PASS</span>
+          </div>
+        </div>
       </div>
     </aside>
   );

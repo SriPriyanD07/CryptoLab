@@ -188,6 +188,27 @@ export async function deriveEcdhSharedSecret(privateKey: CryptoKey, publicKey: C
   };
 }
 
+export async function deriveHkdfKeyFromBits(rawBits: Uint8Array, infoString: string = 'CryptoLab-v1.0-Session-Key'): Promise<{ sessionKeyHex: string }> {
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    rawBits as unknown as BufferSource,
+    'HKDF',
+    false,
+    ['deriveBits']
+  );
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: new Uint8Array(32) as unknown as BufferSource,
+      info: new TextEncoder().encode(infoString) as unknown as BufferSource
+    },
+    baseKey,
+    256
+  );
+  return { sessionKeyHex: bufferToHex(derived) };
+}
+
 // ----------------- ECDSA (P-256) -----------------
 
 export async function generateEcdsaKeypair(): Promise<{ keypair: CryptoKeyPair; pubHex: string }> {

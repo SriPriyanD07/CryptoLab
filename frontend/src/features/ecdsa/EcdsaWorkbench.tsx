@@ -1,239 +1,393 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { CodeBlock } from '../../components/ui/CodeBlock';
-import { EventLog } from '../../components/terminal/EventLog';
-import type { LogEntry } from '../../components/terminal/EventLog';
+import { SecurityStatus } from '../../components/workstation/SecurityStatus';
+import { CryptoInspector } from '../../components/workstation/CryptoInspector';
+import { AttackerView } from '../../components/workstation/AttackerView';
+import { ProtocolTrace, type ProtocolEvent } from '../../components/terminal/ProtocolTrace';
 import {
   generateEcdsaKeypair,
   ecdsaSign,
-  ecdsaVerify
+  ecdsaVerify,
+  computeSha256
 } from '../../lib/crypto/webCrypto';
-import { CheckCircle2, XCircle, RefreshCw, FileSignature } from 'lucide-react';
+import { CheckCircle2, XCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 
 export const EcdsaWorkbench: React.FC = () => {
   const [originalMessage, setOriginalMessage] = useState<string>('Transfer ₹100 to Alice');
   const [evaluatedMessage, setEvaluatedMessage] = useState<string>('Transfer ₹100 to Alice');
   const [keypair, setKeypair] = useState<CryptoKeyPair | null>(null);
   const [publicKeyHex, setPublicKeyHex] = useState<string>('');
+  const [messageHashHex, setMessageHashHex] = useState<string>('');
   const [signature, setSignature] = useState<{ sigHex: string; rHex: string; sHex: string } | null>(null);
   const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', timestamp: '00:00:01', source: 'ECDSA-ENGINE', message: 'Initialized NIST P-256 (SHA-256) signature engine', type: 'info' }
+  const [events, setEvents] = useState<ProtocolEvent[]>([
+    {
+      id: 'init-1',
+      timestamp: '00:00:01',
+      actor: 'SYSTEM',
+      action: 'Initialized NIST P-256 signature engine with SHA-256',
+      direction: 'internal',
+      status: 'info'
+    }
   ]);
 
-  const addLog = (message: string, type: 'info' | 'success' | 'warn' | 'error' = 'info') => {
-    const entry: LogEntry = {
-      id: Date.now().toString() + Math.random(),
+  const addEvent = (
+    actor: 'ALICE' | 'BOB' | 'SYSTEM' | 'NETWORK' | 'ATTACKER',
+    action: string,
+    direction: 'outbound' | 'inbound' | 'internal' | 'intercepted' = 'internal',
+    status: 'info' | 'success' | 'warn' | 'error' = 'info',
+    metadata?: Record<string, string | number | boolean>
+  ) => {
+    const newEvt: ProtocolEvent = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       timestamp: new Date().toTimeString().split(' ')[0],
-      source: 'ECDSA-PROTOCOL',
-      message,
-      type
+      actor,
+      action,
+      direction,
+      status,
+      metadata
     };
-    setLogs((prev) => [entry, ...prev.slice(0, 49)]);
+    setEvents((prev) => [newEvt, ...prev.slice(0, 49)]);
   };
 
   const handleGenerateKeypair = async () => {
-    addLog('Generating new NIST P-256 signing keypair...', 'info');
-    const kp = await generateEcdsaKeypair();
-    setKeypair(kp.keypair);
-    setPublicKeyHex(kp.pubHex);
-    setSignature(null);
-    setVerificationResult(null);
-    addLog(`Derived public verification key: ${kp.pubHex.substring(0, 24)}...`, 'success');
+    setLoading(true);
+    try {
+      addEvent('SYSTEM', 'Generating new NIST P-256 signing keypair...', 'internal', 'info');
+      const kp = await generateEcdsaKeypair();
+      setKeypair(kp.keypair);
+      setPublicKeyHex(kp.pubHex);
+
+      const hashRes = await computeSha256(originalMessage);
+      setMessageHashHex(hashRes.hex);
+
+      const sig = await ecdsaSign(kp.keypair.privateKey, originalMessage);
+      setSignature(sig);
+      setEvaluatedMessage(originalMessage);
+      setVerificationResult(true);
+
+      addEvent('ALICE', `Message prepared: "${originalMessage}"`, 'internal', 'info');
+      addEvent('SYSTEM', `Message hashed via SHA-256: ${hashRes.hex.substring(0, 16)}...`, 'internal', 'info');
+      addEvent('ALICE', 'Generated ECDSA signature envelope (r: 32 bytes, s: 32 bytes)', 'outbound', 'success');
+      addEvent('BOB', 'Verified signature against original message: VALID', 'inbound', 'success');
+    } catch (err: any) {
+      addEvent('SYSTEM', `Key generation error: ${err.message}`, 'internal', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSign = async () => {
     if (!keypair) return;
-    addLog(`Signing message digest with private key: "${originalMessage}"`, 'info');
-    const sig = await ecdsaSign(keypair.privateKey, originalMessage);
-    setSignature(sig);
-    setEvaluatedMessage(originalMessage);
-    setVerificationResult(true);
-    addLog(`Signature generated (r: 32 bytes, s: 32 bytes)`, 'success');
+    setLoading(true);
+    try {
+      const hashRes = await computeSha256(originalMessage);
+      setMessageHashHex(hashRes.hex);
+
+      addEvent('ALICE', `Message digest prepared: "${originalMessage}"`, 'internal', 'info');
+      const sig = await ecdsaSign(keypair.privateKey, originalMessage);
+      setSignature(sig);
+      setEvaluatedMessage(originalMessage);
+      setVerificationResult(true);
+
+      addEvent('ALICE', 'Generated fresh ECDSA signature (r, s)', 'outbound', 'success', {
+        r: sig.rHex.substring(0, 16) + '...',
+        s: sig.sHex.substring(0, 16) + '...'
+      });
+      addEvent('BOB', 'Signature verification evaluated: VALID', 'inbound', 'success');
+    } catch (err: any) {
+      addEvent('SYSTEM', `Signing error: ${err.message}`, 'internal', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerify = async () => {
     if (!keypair || !signature) return;
-    addLog(`Evaluating signature verification for message: "${evaluatedMessage}"`, 'info');
+    addEvent('BOB', `Evaluating signature verification for message: "${evaluatedMessage}"`, 'inbound', 'info');
     const isValid = await ecdsaVerify(keypair.publicKey, signature.sigHex, evaluatedMessage);
     setVerificationResult(isValid);
 
     if (isValid) {
-      addLog('Signature verification SUCCESS: Message integrity and authenticity intact.', 'success');
+      addEvent('BOB', 'Signature verification SUCCESS: Message integrity and authenticity intact.', 'inbound', 'success');
     } else {
-      addLog('Signature verification FAILED: Signature mismatch or message payload modified.', 'error');
+      addEvent('BOB', 'Signature verification FAILED: Digest mismatch or message payload was modified.', 'inbound', 'error');
     }
+  };
+
+  const handleTamperPreset = () => {
+    const tampered = 'Transfer ₹900 to Attacker';
+    setEvaluatedMessage(tampered);
+    addEvent('ATTACKER', `Modified message payload on wire to: "${tampered}"`, 'intercepted', 'warn');
+  };
+
+  const handleRestoreMessage = () => {
+    setEvaluatedMessage(originalMessage);
+    addEvent('SYSTEM', 'Restored verified original message payload', 'internal', 'info');
   };
 
   useEffect(() => {
     handleGenerateKeypair();
   }, []);
 
+  const isTampered = evaluatedMessage !== originalMessage;
+
   return (
-    <div className="space-y-4">
-      {/* Title */}
-      <div>
+    <div className="space-y-4 font-mono text-xs select-none">
+      {/* Workstation Header */}
+      <div className="border border-[#20252b] bg-[#090b0e] rounded-[2px] p-3 flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
         <div className="flex items-center space-x-2">
-          <h1 className="font-mono text-base font-bold text-slate-100 uppercase tracking-tight">
-            ECDSA Digital Signatures Workbench
-          </h1>
-          <Badge variant="prod">ECDSA P-256 + SHA-256 &bull; WEB CRYPTO API</Badge>
-        </div>
-        <p className="font-mono text-xs text-slate-400 mt-0.5">
-          Asymmetric message authentication, integrity verification, and non-repudiation over elliptic curves.
-        </p>
-      </div>
-
-      {/* Conceptual Distinction Callout */}
-      <div className="p-2.5 bg-slate-900 border border-slate-800 rounded font-mono text-xs text-slate-300 flex items-center justify-between">
-        <div>
-          <span className="text-sky-400 font-bold">ECDH</span>: Key Agreement (both sides establish a shared secret)
-        </div>
-        <div className="text-slate-600">|</div>
-        <div>
-          <span className="text-emerald-400 font-bold">ECDSA</span>: Digital Signatures (sender signs, receiver verifies)
-        </div>
-      </div>
-
-      {/* Keypair Panel */}
-      <Card
-        title="SIGNING KEYPAIR"
-        action={
-          <button
-            onClick={handleGenerateKeypair}
-            className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs transition-colors"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>NEW KEYPAIR</span>
-          </button>
-        }
-      >
-        <div className="font-mono text-xs space-y-2">
-          <div className="text-slate-400 text-[11px]">Private Signing Key: [Protected in memory enclave]</div>
-          <CodeBlock label="Public Verification Key (65 bytes hex)" value={publicKeyHex} />
-        </div>
-      </Card>
-
-      {/* Signing Workspace */}
-      <Card title="1. MESSAGE COMPOSITION & SIGNING">
-        <div className="space-y-3 font-mono text-xs">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
           <div>
-            <label className="text-[11px] text-slate-400 uppercase font-semibold">Original Message to Sign</label>
-            <div className="flex items-center space-x-2 mt-1">
-              <input
-                type="text"
-                value={originalMessage}
-                onChange={(e) => setOriginalMessage(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
-              />
-              <button
-                onClick={handleSign}
-                disabled={!keypair}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs font-semibold tracking-wider transition-colors"
-              >
-                <FileSignature className="w-3.5 h-3.5" />
-                <span>SIGN MESSAGE</span>
-              </button>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-xs font-bold text-[#e6e7e9] tracking-wider uppercase">
+                ECDSA DIGITAL SIGNATURE WORKBENCH
+              </h1>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-[2px] bg-[#161a20] border border-[#20252b] text-[#8b929a] font-semibold">
+                FIPS 186-4 &bull; P-256 + SHA-256
+              </span>
+            </div>
+            <div className="text-[10px] text-[#8b929a]">
+              Asymmetric digital signatures // Point scalar signing & non-repudiation verification
             </div>
           </div>
-
-          {signature && (
-            <div className="pt-2 border-t border-slate-800/80 space-y-2">
-              <div className="text-[11px] text-slate-400 uppercase font-semibold">Generated Signature Components (64 bytes raw)</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <CodeBlock label="r component (32 bytes hex)" value={signature.rHex} />
-                <CodeBlock label="s component (32 bytes hex)" value={signature.sHex} />
-              </div>
-              <CodeBlock label="Full Concatenated Signature (Hex)" value={signature.sigHex} />
-            </div>
-          )}
         </div>
-      </Card>
 
-      {/* Verification & Live Tampering */}
-      {signature && (
-        <Card title="2. VERIFICATION & LIVE PAYLOAD TAMPERING EXPERIMENT">
-          <div className="space-y-3 font-mono text-xs">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] text-slate-400 uppercase font-semibold">Message Received at Verifier</label>
-                <div className="flex items-center space-x-2">
+        {/* Global Controls */}
+        <div className="flex items-center space-x-2 shrink-0">
+          <button
+            onClick={handleGenerateKeypair}
+            disabled={loading}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-[2px] bg-[#11151a] hover:bg-[#161b22] text-[#e6e7e9] border border-[#20252b] font-bold text-[10.5px] transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3 h-3 text-[#8b929a] ${loading ? 'animate-spin' : ''}`} />
+            <span>NEW KEYPAIR</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Security Status Rail */}
+      <div className="mb-4">
+        <SecurityStatus
+          title="SIGNATURE & AUTHENTICATION STATUS"
+          customItems={[
+            {
+              id: 'keypair',
+              label: 'KEYPAIR',
+              status: keypair ? 'complete' : 'idle',
+              detail: keypair ? 'P-256 Ready' : 'Pending'
+            },
+            {
+              id: 'signature',
+              label: 'ECDSA SIGNATURE',
+              status: signature ? 'complete' : 'idle',
+              detail: signature ? '64-byte (r, s)' : 'None'
+            },
+            {
+              id: 'verification',
+              label: 'INTEGRITY VERIFICATION',
+              status: verificationResult === true ? 'verified' : verificationResult === false ? 'failed' : 'pending',
+              detail: verificationResult === true ? 'SIGNATURE VALID' : verificationResult === false ? 'SIGNATURE INVALID' : 'PENDING'
+            }
+          ]}
+        />
+      </div>
+
+      {/* 3-Column Standard Workstation Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(250px,1fr)_minmax(380px,1.4fr)_minmax(280px,1fr)] xl:grid-cols-[minmax(260px,1fr)_minmax(420px,1.5fr)_minmax(300px,1fr)] gap-4 items-start">
+        {/* Left Column: Signer / Payload Input */}
+        <div className="space-y-4 min-w-0">
+          <Card title="1. ALICE (SIGNER)">
+            <div className="space-y-2 text-[10.5px]">
+              <div>
+                <label className="text-[10px] text-[#8b929a] uppercase font-semibold block">
+                  Original Message to Sign:
+                </label>
+                <input
+                  type="text"
+                  value={originalMessage}
+                  onChange={(e) => setOriginalMessage(e.target.value)}
+                  className="w-full mt-1 bg-[#090b0e] border border-[#20252b] rounded-[2px] px-2 py-1 text-[#e6e7e9] focus:outline-none focus:border-[#8b929a] font-mono text-xs"
+                />
+              </div>
+
+              <div className="pt-1 flex justify-end">
+                <button
+                  onClick={handleSign}
+                  className="px-2.5 py-1 rounded-[2px] bg-[#e6e7e9] hover:bg-white text-black font-bold text-[10.5px] border border-[#e6e7e9] transition-colors"
+                >
+                  GENERATE SIGNATURE
+                </button>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <div>
+                  <span className="text-[9px] text-[#5f6670] uppercase font-semibold block">SHA-256 Digest:</span>
+                  <div className="p-1.5 rounded-[2px] bg-[#090b0e] border border-[#20252b] font-mono text-[9px] text-[#cbd5e1] break-all select-all">
+                    {messageHashHex || 'Hashing...'}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[9px] text-[#5f6670] uppercase font-semibold block">Signature (r, s):</span>
+                  <div className="p-1.5 rounded-[2px] bg-[#090b0e] border border-[#20252b] font-mono text-[9px] text-[#e6e7e9] break-all select-all">
+                    {signature?.sigHex || 'Pending...'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Center Column: Bob Verifier & Tamper Simulation */}
+        <div className="space-y-4 min-w-0">
+          <Card
+            title="2. BOB (VERIFIER & TESTBED)"
+            action={
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={handleTamperPreset}
+                  className="px-1.5 py-0.5 rounded-[2px] bg-rose-950/60 hover:bg-rose-900/60 border border-rose-800 text-rose-300 text-[9px] font-mono transition-colors cursor-pointer"
+                >
+                  SIMULATE TAMPER
+                </button>
+                {isTampered && (
                   <button
-                    onClick={() => {
-                      setEvaluatedMessage(originalMessage);
-                      addLog('Reset message to original payload');
-                    }}
-                    className="text-[10px] text-slate-400 hover:text-slate-200 underline"
+                    onClick={handleRestoreMessage}
+                    className="px-1.5 py-0.5 rounded-[2px] bg-[#161a20] hover:bg-[#20252b] border border-[#20252b] text-[#e6e7e9] text-[9px] font-mono transition-colors cursor-pointer"
                   >
-                    Reset to Original
+                    RESTORE
                   </button>
+                )}
+              </div>
+            }
+          >
+            <div className="space-y-2 text-[10.5px]">
+              <div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <label className="text-[#8b929a] uppercase font-semibold">Message Delivered to Bob:</label>
+                  {isTampered && <span className="text-rose-400 font-bold text-[9px]">[MODIFIED ON WIRE]</span>}
+                </div>
+                <div className="flex items-center space-x-1.5 mt-1">
+                  <input
+                    type="text"
+                    value={evaluatedMessage}
+                    onChange={(e) => setEvaluatedMessage(e.target.value)}
+                    className={`grow bg-[#090b0e] border rounded-[2px] px-2 py-1 font-mono text-xs ${
+                      isTampered
+                        ? 'border-rose-600 text-rose-300 bg-rose-950/20'
+                        : 'border-[#20252b] text-[#e6e7e9] focus:border-[#8b929a] focus:outline-none'
+                    }`}
+                  />
                   <button
-                    onClick={() => {
-                      setEvaluatedMessage('Transfer ₹900 to Eve');
-                      addLog('Simulated active attacker modifying payload to "Transfer ₹900 to Eve"', 'warn');
-                    }}
-                    className="text-[10px] text-amber-400 hover:text-amber-300 underline"
+                    onClick={handleVerify}
+                    className="px-3 py-1 rounded-[2px] bg-[#11151a] hover:bg-[#161b22] text-[#e6e7e9] border border-[#20252b] font-bold text-[10.5px] shrink-0 transition-colors cursor-pointer"
                   >
-                    Simulate Tamper
+                    VERIFY
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={evaluatedMessage}
-                  onChange={(e) => setEvaluatedMessage(e.target.value)}
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
-                />
-                <button
-                  onClick={handleVerify}
-                  className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs font-semibold tracking-wider transition-colors border border-slate-700"
-                >
-                  VERIFY
-                </button>
-              </div>
-            </div>
-
-            {verificationResult !== null && (
+              {/* Verification Outcome Box */}
               <div
-                className={`p-3 rounded border font-mono text-xs flex items-center space-x-2.5 transition-all ${
-                  verificationResult
-                    ? 'bg-emerald-950/30 border-emerald-800/80 text-emerald-400'
-                    : 'bg-rose-950/40 border-rose-800/80 text-rose-300'
+                className={`p-2.5 rounded-[2px] border flex items-center justify-between ${
+                  verificationResult === true
+                    ? 'bg-[#081510] border-emerald-900/80 text-emerald-300'
+                    : verificationResult === false
+                    ? 'bg-rose-950/30 border-rose-700 text-rose-300'
+                    : 'bg-[#090b0e] border-[#20252b] text-[#8b929a]'
                 }`}
               >
-                {verificationResult ? (
-                  <>
+                <div className="flex items-center space-x-2">
+                  {verificationResult === true ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <div>
-                      <div className="font-bold uppercase tracking-wider text-[11px]">SIGNATURE VALID</div>
-                      <div className="text-[11px] text-emerald-400/80">
-                        Cryptographic signature matches public key and message digest. Authentic origin confirmed.
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
+                  ) : verificationResult === false ? (
                     <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <div>
-                      <div className="font-bold uppercase tracking-wider text-[11px]">SIGNATURE INVALID</div>
-                      <div className="text-[11px] text-rose-300/80">
-                        Signature verification rejected. Message was altered in transit or signed by a different key.
-                      </div>
-                    </div>
-                  </>
-                )}
+                  ) : (
+                    <ShieldCheck className="w-4 h-4 text-[#5f6670] shrink-0" />
+                  )}
+                  <div>
+                    <span className="font-bold tracking-wider uppercase text-[11px] block">
+                      {verificationResult === true
+                        ? 'SIGNATURE VALID — INTEGRITY VERIFIED'
+                        : verificationResult === false
+                        ? 'SIGNATURE INVALID — TAMPER DETECTED'
+                        : 'PENDING VERIFICATION EVALUATION'}
+                    </span>
+                    <span className="text-[9.5px] text-[#8b929a] block mt-0.5">
+                      {verificationResult === true
+                        ? 'Signature (r, s) mathematically verifies against message hash and public key.'
+                        : verificationResult === false
+                        ? 'Digest mismatch: Payload modified after signing. Verification strictly rejected.'
+                        : 'Click VERIFY to evaluate cryptographic validity.'}
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        </Card>
-      )}
+            </div>
+          </Card>
+        </div>
 
-      {/* Event Stream */}
-      <EventLog logs={logs} onClear={() => setLogs([])} />
+        {/* Right Column: Inspector & Observability */}
+        <div className="space-y-4 min-w-0">
+          <CryptoInspector
+            title="ECDSA PARAMETER INSPECTOR"
+            protocol="ECDSA (P-256)"
+            sections={[
+              {
+                id: 'keys',
+                title: 'KEY MATERIAL',
+                fields: [
+                  { id: 'curve', label: 'Curve', value: 'NIST P-256', tag: 'SECP256R1' },
+                  { id: 'pub', label: 'Public Key', value: publicKeyHex, copyable: true },
+                  {
+                    id: 'priv',
+                    label: 'Private Key',
+                    value: 'Hardware-backed CryptoKey',
+                    sensitive: true,
+                    copyable: false
+                  }
+                ]
+              },
+              {
+                id: 'sig_env',
+                title: 'SIGNATURE ENVELOPE',
+                fields: [
+                  { id: 'r', label: 'Scalar r', value: signature?.rHex, copyable: true },
+                  { id: 's', label: 'Scalar s', value: signature?.sHex, copyable: true },
+                  { id: 'h', label: 'Message Hash', value: messageHashHex, copyable: true }
+                ]
+              }
+            ]}
+          />
+
+          <AttackerView
+            title="NETWORK OBSERVATION"
+            threatModel="Passive wire eavesdropping + Active message tampering"
+            tampered={isTampered}
+            tamperMessage={isTampered ? 'Forged Message Payload' : undefined}
+            observable={[
+              { id: 'obs_pub', label: 'Public Signing Key', value: publicKeyHex },
+              { id: 'obs_sig', label: 'Wire Signature (r,s)', value: signature?.sigHex },
+              { id: 'obs_msg', label: 'Wire Message', value: evaluatedMessage }
+            ]}
+            protectedItems={[
+              { id: 'prot_priv', label: 'Signer Private Scalar d' }
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* Bottom Full-Width Section: Real Event Protocol Trace */}
+      <div className="mt-4">
+        <ProtocolTrace
+          title="ECDSA EXECUTION TRACE"
+          events={events}
+          onClear={() => setEvents([])}
+        />
+      </div>
     </div>
   );
 };

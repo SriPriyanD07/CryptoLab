@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { CodeBlock } from '../../components/ui/CodeBlock';
-import { EventLog } from '../../components/terminal/EventLog';
-import type { LogEntry } from '../../components/terminal/EventLog';
+import { SecurityStatus } from '../../components/workstation/SecurityStatus';
+import { CryptoInspector } from '../../components/workstation/CryptoInspector';
+import { AttackerView } from '../../components/workstation/AttackerView';
+import { ProtocolFlow, type FlowMessage } from '../../components/workstation/ProtocolFlow';
+import { ProtocolTrace, type ProtocolEvent } from '../../components/terminal/ProtocolTrace';
 import {
   generateAesKey,
   generateNonce,
@@ -11,28 +12,36 @@ import {
   aesGcmDecrypt,
   bufferToHex
 } from '../../lib/crypto/webCrypto';
-import { RefreshCw, AlertOctagon, CheckCircle2 } from 'lucide-react';
+import {
+  Scissors,
+  AlertOctagon,
+  ShieldCheck,
+  ShieldAlert,
+  RefreshCw,
+  Edit3
+} from 'lucide-react';
+import { AdversaryAttack3D } from '../../components/visualization/AdversaryAttack3D';
 
 export const TamperingWorkbench: React.FC = () => {
-  const [plaintext, setPlaintext] = useState<string>('Authorize wire transfer of $1,000,000 to Account #7731');
-  const [aad, setAad] = useState<string>('Routing: SWIFT-FEDWIRE | Clearance: Level-4');
+  const [plaintext] = useState<string>('Authorize wire transfer of $1,000,000 to Account #7731');
+  const [aad] = useState<string>('Routing: SWIFT-FEDWIRE | Clearance: Level-4');
 
   const [aesKey, setAesKey] = useState<CryptoKey | null>(null);
-  const [nonce] = useState<Uint8Array>(generateNonce(12));
   const [originalPacket, setOriginalPacket] = useState<{
     ciphertextHex: string;
     tagHex: string;
+    nonceHex: string;
+    aad: string;
   } | null>(null);
 
-  // Attack Controls
-  const [attackVector, setAttackVector] = useState<'bitflip' | 'header' | 'tag'>('bitflip');
-  const [byteOffset, setByteOffset] = useState<number>(0);
-  const [forgedHeader, setForgedHeader] = useState<string>('Routing: REDIRECT_TO_ATTACKER_ACCOUNT');
+  // Attack Vector selection
+  const [activeTamperMode, setActiveTamperMode] = useState<'none' | 'ciphertext' | 'aad' | 'nonce'>('none');
 
-  // Mutated Packet State
-  const [mutatedCiphertext, setMutatedCiphertext] = useState<string>('');
-  const [mutatedTag, setMutatedTag] = useState<string>('');
-  const [mutatedAad, setMutatedAad] = useState<string>('');
+  // Transmitted/Mutated Wire Packet
+  const [wireCiphertext, setWireCiphertext] = useState<string>('');
+  const [wireTag, setWireTag] = useState<string>('');
+  const [wireNonceHex, setWireNonceHex] = useState<string>('');
+  const [wireAad, setWireAad] = useState<string>('');
 
   const [receiverResult, setReceiverResult] = useState<{
     success: boolean;
@@ -40,291 +49,494 @@ export const TamperingWorkbench: React.FC = () => {
     error?: string;
   } | null>(null);
 
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', timestamp: '00:00:01', source: 'ATTACK-LAB', message: 'Initialized active adversary wire interception laboratory', type: 'info' }
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const [events, setEvents] = useState<ProtocolEvent[]>([
+    {
+      id: 'init-1',
+      timestamp: '00:00:01',
+      actor: 'SYSTEM',
+      action: 'Initialized active adversary wire interception laboratory',
+      direction: 'internal',
+      status: 'info'
+    }
   ]);
 
-  const addLog = (message: string, type: 'info' | 'success' | 'warn' | 'error' = 'info') => {
-    const entry: LogEntry = {
-      id: Date.now().toString() + Math.random(),
+  const addEvent = (
+    actor: 'ALICE' | 'BOB' | 'NETWORK' | 'ATTACKER' | 'SYSTEM',
+    action: string,
+    direction: 'outbound' | 'inbound' | 'internal' | 'intercepted' = 'internal',
+    status: 'info' | 'success' | 'warn' | 'error' = 'info',
+    metadata?: Record<string, string | number | boolean>
+  ) => {
+    const newEvt: ProtocolEvent = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       timestamp: new Date().toTimeString().split(' ')[0],
-      source: 'ADVERSARY-TOOL',
-      message,
-      type
+      actor,
+      action,
+      direction,
+      status,
+      metadata
     };
-    setLogs((prev) => [entry, ...prev.slice(0, 49)]);
+    setEvents((prev) => [newEvt, ...prev.slice(0, 49)]);
   };
 
   const initData = async () => {
-    const { key } = await generateAesKey();
-    setAesKey(key);
+    setLoading(true);
+    try {
+      const { key } = await generateAesKey();
+      setAesKey(key);
 
-    const enc = await aesGcmEncrypt(plaintext, key, nonce, aad);
-    setOriginalPacket({
-      ciphertextHex: enc.ciphertextHex,
-      tagHex: enc.tagHex
-    });
+      const freshNonce = generateNonce(12);
+      const nonceHex = bufferToHex(freshNonce);
 
-    setMutatedCiphertext(enc.ciphertextHex);
-    setMutatedTag(enc.tagHex);
-    setMutatedAad(aad);
-    setReceiverResult(null);
-    addLog('Baseline authenticated packet generated and cached on wire.', 'info');
-  };
+      const enc = await aesGcmEncrypt(plaintext, key, freshNonce, aad);
+      const baseline = {
+        ciphertextHex: enc.ciphertextHex,
+        tagHex: enc.tagHex,
+        nonceHex,
+        aad
+      };
 
-  const applyAttack = () => {
-    if (!originalPacket) return;
+      setOriginalPacket(baseline);
+      setWireCiphertext(enc.ciphertextHex);
+      setWireTag(enc.tagHex);
+      setWireNonceHex(nonceHex);
+      setWireAad(aad);
+      setActiveTamperMode('none');
 
-    if (attackVector === 'bitflip') {
-      const chars = originalPacket.ciphertextHex.split('');
-      const targetIdx = Math.min(byteOffset * 2, chars.length - 1);
-      chars[targetIdx] = chars[targetIdx] === 'f' ? '0' : 'f';
-      const modified = chars.join('');
-      setMutatedCiphertext(modified);
-      setMutatedTag(originalPacket.tagHex);
-      setMutatedAad(aad);
-      addLog(`Adversary bit-flip attack executed at hex nibble index ${targetIdx}`, 'warn');
-    } else if (attackVector === 'header') {
-      setMutatedCiphertext(originalPacket.ciphertextHex);
-      setMutatedTag(originalPacket.tagHex);
-      setMutatedAad(forgedHeader);
-      addLog(`Adversary forged Associated Data header: "${forgedHeader}"`, 'warn');
-    } else {
-      const tagChars = originalPacket.tagHex.split('');
-      tagChars[0] = tagChars[0] === 'a' ? 'b' : 'a';
-      setMutatedCiphertext(originalPacket.ciphertextHex);
-      setMutatedTag(tagChars.join(''));
-      setMutatedAad(aad);
-      addLog(`Adversary corrupted authentication tag bits`, 'warn');
+      // Receiver initial verification
+      const dec = await aesGcmDecrypt(enc.ciphertextHex, enc.tagHex, nonceHex, key, aad);
+      setReceiverResult(dec);
+
+      addEvent('ALICE', 'Generated authenticated baseline packet (Ciphertext + Nonce + AAD + GHASH Tag)', 'outbound', 'info');
+      addEvent('NETWORK', 'Packet in transit on public wire', 'internal', 'info');
+      addEvent('BOB', 'Authentication verified: Plaintext released to receiver', 'inbound', 'success');
+    } catch (err: any) {
+      addEvent('SYSTEM', `Initialization error: ${err.message}`, 'internal', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const evaluateReceiver = async () => {
-    if (!aesKey || !originalPacket) return;
-    addLog('Receiver evaluating packet integrity with local AES-GCM subkey...', 'info');
+  // Attack Actions
+  const handleTamperCiphertext = async () => {
+    if (!originalPacket || !aesKey) return;
+    const chars = originalPacket.ciphertextHex.split('');
+    chars[0] = chars[0] === 'a' ? 'b' : 'a';
+    const modified = chars.join('');
+
+    setWireCiphertext(modified);
+    setWireTag(originalPacket.tagHex);
+    setWireNonceHex(originalPacket.nonceHex);
+    setWireAad(originalPacket.aad);
+    setActiveTamperMode('ciphertext');
+
+    addEvent('ATTACKER', 'In-flight bit-flip: Modified first nibble of ciphertext payload', 'intercepted', 'warn');
+
+    const dec = await aesGcmDecrypt(modified, originalPacket.tagHex, originalPacket.nonceHex, aesKey, originalPacket.aad);
+    setReceiverResult(dec);
+
+    addEvent('BOB', 'Executing GHASH authentication polynomial check...', 'inbound', 'info');
+    addEvent('BOB', 'AUTHENTICATION FAILED: Ciphertext integrity violated. Plaintext NOT released.', 'inbound', 'error');
+  };
+
+  const handleTamperAad = async () => {
+    if (!originalPacket || !aesKey) return;
+    const forgedAad = 'Routing: REDIRECT_TO_ATTACKER_ACCOUNT | Clearance: Level-1';
+
+    setWireCiphertext(originalPacket.ciphertextHex);
+    setWireTag(originalPacket.tagHex);
+    setWireNonceHex(originalPacket.nonceHex);
+    setWireAad(forgedAad);
+    setActiveTamperMode('aad');
+
+    addEvent('ATTACKER', `In-flight header forge: Mutated Associated Data (AAD) to "${forgedAad}"`, 'intercepted', 'warn');
+
+    const dec = await aesGcmDecrypt(originalPacket.ciphertextHex, originalPacket.tagHex, originalPacket.nonceHex, aesKey, forgedAad);
+    setReceiverResult(dec);
+
+    addEvent('BOB', 'Executing GHASH authentication polynomial check...', 'inbound', 'info');
+    addEvent('BOB', 'AUTHENTICATION FAILED: AAD metadata forged. Plaintext NOT released.', 'inbound', 'error');
+  };
+
+  const handleTamperNonce = async () => {
+    if (!originalPacket || !aesKey) return;
+    const nonceChars = originalPacket.nonceHex.split('');
+    nonceChars[0] = nonceChars[0] === '0' ? '1' : '0';
+    const corruptedNonce = nonceChars.join('');
+
+    setWireCiphertext(originalPacket.ciphertextHex);
+    setWireTag(originalPacket.tagHex);
+    setWireNonceHex(corruptedNonce);
+    setWireAad(originalPacket.aad);
+    setActiveTamperMode('nonce');
+
+    addEvent('ATTACKER', 'In-flight IV corruption: Mutated initialization vector nonce bits', 'intercepted', 'warn');
+
+    const dec = await aesGcmDecrypt(originalPacket.ciphertextHex, originalPacket.tagHex, corruptedNonce, aesKey, originalPacket.aad);
+    setReceiverResult(dec);
+
+    addEvent('BOB', 'Executing GHASH authentication polynomial check...', 'inbound', 'info');
+    addEvent('BOB', 'AUTHENTICATION FAILED: IV mismatch detected. Plaintext NOT released.', 'inbound', 'error');
+  };
+
+  const handleRestoreOriginal = async () => {
+    if (!originalPacket || !aesKey) return;
+    setWireCiphertext(originalPacket.ciphertextHex);
+    setWireTag(originalPacket.tagHex);
+    setWireNonceHex(originalPacket.nonceHex);
+    setWireAad(originalPacket.aad);
+    setActiveTamperMode('none');
+
     const dec = await aesGcmDecrypt(
-      mutatedCiphertext,
-      mutatedTag,
-      bufferToHex(nonce),
+      originalPacket.ciphertextHex,
+      originalPacket.tagHex,
+      originalPacket.nonceHex,
       aesKey,
-      mutatedAad
+      originalPacket.aad
     );
     setReceiverResult(dec);
 
-    if (dec.success) {
-      addLog(`Receiver: Authenticated successfully!`, 'success');
-    } else {
-      addLog(`Receiver: Tampering detected! Aborted with GHASH tag mismatch.`, 'error');
-    }
+    addEvent('SYSTEM', 'Restored wire packet to authentic state', 'internal', 'info');
+    addEvent('BOB', 'Authentication verified: Plaintext released to receiver', 'inbound', 'success');
   };
 
   useEffect(() => {
     initData();
   }, []);
 
-  useEffect(() => {
-    applyAttack();
-  }, [attackVector, byteOffset, forgedHeader]);
+  const flowMessages: FlowMessage[] = [
+    {
+      id: 'wire-frame',
+      sender: 'alice',
+      receiver: 'bob',
+      label: 'AEAD Transmitted Frame',
+      type: 'ciphertext',
+      status: activeTamperMode !== 'none' ? 'failed' : 'delivered',
+      intercepted: activeTamperMode !== 'none',
+      modified: activeTamperMode !== 'none',
+      tamperedDetail:
+        activeTamperMode === 'ciphertext'
+          ? 'Bit-flipped ciphertext payload'
+          : activeTamperMode === 'aad'
+          ? 'Forged unencrypted associated data header'
+          : activeTamperMode === 'nonce'
+          ? 'Corrupted initialization vector'
+          : undefined,
+      payloadPreview: `CT: ${wireCiphertext.substring(0, 16)}... | IV: ${wireNonceHex.substring(0, 8)}... | Tag: ${wireTag.substring(0, 8)}...`
+    }
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* Title */}
-      <div>
+    <div className="space-y-4 font-mono text-xs select-none">
+      {/* Workstation Header */}
+      <div className="border border-[#20252b] bg-[#090b0e] rounded-[2px] p-3 flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
         <div className="flex items-center space-x-2">
-          <h1 className="font-mono text-base font-bold text-slate-100 uppercase tracking-tight">
-            Active Tampering & MitM Attack Laboratory
-          </h1>
-          <Badge variant="warn">ACTIVE ADVERSARY SIMULATION</Badge>
+          <span className="w-1.5 h-1.5 bg-rose-500 rounded-full shrink-0"></span>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-xs font-bold text-[#e6e7e9] tracking-wider uppercase">
+                TAMPERING STUDIO & ACTIVE ADVERSARY SIMULATION
+              </h1>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-[2px] bg-rose-950/40 border border-rose-800 text-rose-300 font-semibold">
+                ACTIVE MITM TESTBED
+              </span>
+            </div>
+            <div className="text-[10px] text-[#8b929a]">
+              In-flight wire corruption // Test ciphertext bit-flips, AAD header forgery & IV corruption under Dolev-Yao model
+            </div>
+          </div>
         </div>
-        <p className="font-mono text-xs text-slate-400 mt-0.5">
-          Execute in-flight wire packet mutations: bit-flipping, header forging, and evaluate recipient GHASH MAC failure.
-        </p>
-      </div>
 
-      {/* Baseline Wire Packet Generation */}
-      <Card
-        title="ORIGINAL TRANSMITTED PACKET (ALICE OUTPUT)"
-        action={
+        {/* Global Controls */}
+        <div className="flex items-center space-x-2 shrink-0">
           <button
             onClick={initData}
-            className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono transition-colors"
+            disabled={loading}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-[2px] bg-[#11151a] hover:bg-[#161b22] text-[#e6e7e9] border border-[#20252b] font-bold text-[10.5px] transition-colors cursor-pointer"
           >
-            <RefreshCw className="w-3 h-3" />
-            <span>GENERATE NEW BASELINE</span>
-          </button>
-        }
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs">
-          <div>
-            <label className="text-[11px] text-slate-400 uppercase font-semibold">Plaintext Payload</label>
-            <input
-              type="text"
-              value={plaintext}
-              onChange={(e) => setPlaintext(e.target.value)}
-              className="w-full mt-1 bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] text-slate-400 uppercase font-semibold">Associated Data (Cleartext Header)</label>
-            <input
-              type="text"
-              value={aad}
-              onChange={(e) => setAad(e.target.value)}
-              className="w-full mt-1 bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
-            />
-          </div>
-        </div>
-
-        {originalPacket && (
-          <div className="mt-3 pt-2 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs">
-            <CodeBlock label="Original Ciphertext (Hex)" value={originalPacket.ciphertextHex} />
-            <CodeBlock label="Original Authentication Tag (Hex)" value={originalPacket.tagHex} />
-          </div>
-        )}
-      </Card>
-
-      {/* Adversary Mutation Studio */}
-      <Card title="ADVERSARY WIRE MUTATION STUDIO (MAN-IN-THE-MIDDLE)">
-        <div className="space-y-3 font-mono text-xs">
-          <div>
-            <label className="text-[11px] text-slate-400 uppercase font-semibold">Select Attack Vector</label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-1">
-              <button
-                onClick={() => setAttackVector('bitflip')}
-                className={`px-2.5 py-1.5 rounded border text-left transition-colors ${
-                  attackVector === 'bitflip'
-                    ? 'bg-rose-950/40 border-rose-600 text-rose-300 font-bold'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                1. Ciphertext Bit-Flip Attack
-              </button>
-              <button
-                onClick={() => setAttackVector('header')}
-                className={`px-2.5 py-1.5 rounded border text-left transition-colors ${
-                  attackVector === 'header'
-                    ? 'bg-rose-950/40 border-rose-600 text-rose-300 font-bold'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                2. Header (AAD) Modification
-              </button>
-              <button
-                onClick={() => setAttackVector('tag')}
-                className={`px-2.5 py-1.5 rounded border text-left transition-colors ${
-                  attackVector === 'tag'
-                    ? 'bg-rose-950/40 border-rose-600 text-rose-300 font-bold'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                3. Authentication Tag Corruption
-              </button>
-            </div>
-          </div>
-
-          {attackVector === 'bitflip' && (
-            <div>
-              <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                <span>Byte Offset to Invert (XOR 0xFF)</span>
-                <span>Offset: {byteOffset}</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max={originalPacket ? Math.floor(originalPacket.ciphertextHex.length / 2) - 1 : 10}
-                value={byteOffset}
-                onChange={(e) => setByteOffset(Number(e.target.value))}
-                className="w-full"
-              />
-            </div>
-          )}
-
-          {attackVector === 'header' && (
-            <div>
-              <label className="text-[11px] text-slate-400 uppercase font-semibold">Forged Header Value</label>
-              <input
-                type="text"
-                value={forgedHeader}
-                onChange={(e) => setForgedHeader(e.target.value)}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
-              />
-            </div>
-          )}
-
-          {/* Wire Diff Table */}
-          <div className="pt-2 border-t border-slate-800/80">
-            <div className="text-[11px] text-slate-400 uppercase font-semibold mb-2">Wire Mutation State Comparison</div>
-            <div className="space-y-1.5 bg-slate-950 p-2.5 rounded border border-slate-800 text-[11px]">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500">Ciphertext on Wire:</span>
-                <span className={originalPacket?.ciphertextHex !== mutatedCiphertext ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                  {mutatedCiphertext.substring(0, 32)}...
-                  {originalPacket?.ciphertextHex !== mutatedCiphertext && ' [MUTATED]'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500">Auth Tag on Wire:</span>
-                <span className={originalPacket?.tagHex !== mutatedTag ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                  {mutatedTag}
-                  {originalPacket?.tagHex !== mutatedTag && ' [MUTATED]'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500">Header on Wire:</span>
-                <span className={aad !== mutatedAad ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                  {mutatedAad}
-                  {aad !== mutatedAad && ' [MUTATED]'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={evaluateReceiver}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs font-semibold tracking-wider transition-colors border border-slate-700"
-          >
-            <span>DISPATCH MUTATED PACKET TO RECEIVER</span>
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+            <span>NEW PACKET</span>
           </button>
         </div>
-      </Card>
+      </div>
 
-      {/* Receiver Verification Verdict */}
-      {receiverResult && (
-        <Card title="TARGET RECEIVER CRYPTOGRAPHIC VERDICT">
-          <div
-            className={`p-3.5 rounded border font-mono text-xs flex items-center space-x-3 ${
-              receiverResult.success
-                ? 'bg-emerald-950/30 border-emerald-800/80 text-emerald-400'
-                : 'bg-rose-950/40 border-rose-800/80 text-rose-300'
-            }`}
+      {/* Security Status Rail */}
+      <div className="mb-4">
+        <SecurityStatus
+          title="TAMPERING STUDIO EVALUATION STATUS"
+          encryption="complete"
+          authentication={receiverResult?.success ? 'verified' : 'failed'}
+          customItems={[
+            {
+              id: 'wire_state',
+              label: 'WIRE STATE',
+              status: activeTamperMode === 'none' ? 'established' : 'failed',
+              detail: activeTamperMode === 'none' ? 'UNMODIFIED' : `TAMPERED (${activeTamperMode.toUpperCase()})`
+            },
+            {
+              id: 'receiver_auth',
+              label: 'AUTHENTICATION',
+              status: receiverResult?.success ? 'verified' : 'failed',
+              detail: receiverResult?.success ? 'TAG MATCH' : 'TAG MISMATCH'
+            },
+            {
+              id: 'plaintext_release',
+              label: 'PLAINTEXT RELEASE',
+              status: receiverResult?.success ? 'complete' : 'failed',
+              detail: receiverResult?.success ? 'RELEASED' : 'BLOCKED / DROPPED'
+            }
+          ]}
+        />
+      </div>
+
+      {/* 3-Column Standard Workstation Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(250px,1fr)_minmax(380px,1.4fr)_minmax(280px,1fr)] xl:grid-cols-[minmax(260px,1fr)_minmax(420px,1.5fr)_minmax(300px,1fr)] gap-4 items-start">
+        {/* Left Column: Attack Controls & Baseline Envelope */}
+        <div className="space-y-4 min-w-0">
+          <Card title="1. ACTIVE ADVERSARY TAMPER CONTROLS">
+            <div className="space-y-2 text-[10px]">
+              <div className="text-slate-400 font-semibold uppercase text-[9.5px]">
+                Inject Attack Vector into Wire Frame:
+              </div>
+
+              <div className="grid grid-cols-1 gap-1.5">
+                <button
+                  onClick={handleTamperCiphertext}
+                  className={`px-2 py-1.5 rounded-[2px] border font-bold text-[10px] transition-colors flex items-center justify-between ${
+                    activeTamperMode === 'ciphertext'
+                      ? 'bg-rose-950/80 border-rose-500 text-rose-200'
+                      : 'bg-rose-950/30 hover:bg-rose-900/40 border-rose-900/60 text-rose-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <Scissors className="w-3 h-3" />
+                    <span>TAMPER CIPHERTEXT</span>
+                  </div>
+                  <span className="text-[8.5px] opacity-75">1-BIT FLIP</span>
+                </button>
+
+                <button
+                  onClick={handleTamperAad}
+                  className={`px-2 py-1.5 rounded-[2px] border font-bold text-[10px] transition-colors flex items-center justify-between ${
+                    activeTamperMode === 'aad'
+                      ? 'bg-amber-950/80 border-amber-500 text-amber-200'
+                      : 'bg-amber-950/30 hover:bg-amber-900/40 border-amber-900/60 text-amber-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <Edit3 className="w-3 h-3" />
+                    <span>TAMPER AAD</span>
+                  </div>
+                  <span className="text-[8.5px] opacity-75">HEADER FORGE</span>
+                </button>
+
+                <button
+                  onClick={handleTamperNonce}
+                  className={`px-2 py-1.5 rounded-[2px] border font-bold text-[10px] transition-colors flex items-center justify-between ${
+                    activeTamperMode === 'nonce'
+                      ? 'bg-indigo-950/80 border-indigo-500 text-indigo-200'
+                      : 'bg-indigo-950/30 hover:bg-indigo-900/40 border-indigo-900/60 text-indigo-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <AlertOctagon className="w-3 h-3" />
+                    <span>TAMPER NONCE</span>
+                  </div>
+                  <span className="text-[8.5px] opacity-75">IV CORRUPTION</span>
+                </button>
+              </div>
+
+              {activeTamperMode !== 'none' && (
+                <div className="pt-1">
+                  <button
+                    onClick={handleRestoreOriginal}
+                    className="w-full px-2 py-1 rounded-[2px] bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-800 text-emerald-300 font-bold text-[10px] transition-colors"
+                  >
+                    RESTORE ORIGINAL
+                  </button>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card title="AUTHENTIC BASELINE PAYLOAD">
+            <div className="space-y-1.5 text-[10px]">
+              <div>
+                <span className="text-slate-500 uppercase font-semibold text-[9px] block">Baseline Plaintext:</span>
+                <div className="p-1 rounded-[2px] bg-[#06090e] border border-[#141d2a] text-slate-300 truncate">
+                  {plaintext}
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-500 uppercase font-semibold text-[9px] block">Baseline AAD:</span>
+                <div className="p-1 rounded-[2px] bg-[#06090e] border border-[#141d2a] text-amber-300 truncate">
+                  {aad}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Center Column: 3D Adversary Mutation Rig, Protocol Flow & Wire Packet */}
+        <div className="space-y-4 min-w-0">
+          <AdversaryAttack3D
+            tamperTarget={activeTamperMode === 'none' ? null : activeTamperMode}
+            isTampered={activeTamperMode !== 'none'}
+            tamperMessage={activeTamperMode !== 'none' ? `Adversary injected in-transit bit corruption into [${activeTamperMode.toUpperCase()}]` : undefined}
+            wireCiphertext={wireCiphertext}
+            wireTag={wireTag}
+            wireNonce={wireNonceHex}
+          />
+
+          <ProtocolFlow
+            title="PHYSICAL TRANSMISSION (SENDER &rarr; WIRE &rarr; RECEIVER)"
+            messages={flowMessages}
+          />
+
+          {/* Wire Transmitted Packet Inspection */}
+          <Card
+            title="INTERCEPTED WIRE PACKET ENVELOPE"
+            action={
+              activeTamperMode !== 'none' ? (
+                <span className="text-[9px] text-rose-400 font-bold px-1.5 py-0.2 rounded-[2px] bg-rose-950/60 border border-rose-800">
+                  MUTATED ON WIRE
+                </span>
+              ) : (
+                <span className="text-[9px] text-emerald-400 font-bold px-1.5 py-0.2 rounded-[2px] bg-emerald-950/60 border border-emerald-800">
+                  INTACT
+                </span>
+              )
+            }
           >
-            {receiverResult.success ? (
-              <>
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                <div>
-                  <div className="font-bold uppercase tracking-wider text-[11px]">PACKET INTEGRITY CONFIRMED</div>
-                  <div className="text-slate-200 mt-0.5 text-xs">
-                    Decrypted Plaintext: <span className="text-white font-bold">{receiverResult.plaintext}</span>
-                  </div>
+            <div className="space-y-1.5 text-[10px]">
+              <div>
+                <span className="text-[#5f6670] uppercase font-semibold text-[9px] block">Wire Nonce (96-bit IV):</span>
+                <div
+                  className={`p-1 rounded-[2px] font-mono truncate ${
+                    activeTamperMode === 'nonce'
+                      ? 'bg-rose-950/40 border border-rose-700 text-rose-300 font-bold'
+                      : 'bg-[#090b0e] border border-[#20252b] text-[#cbd5e1]'
+                  }`}
+                >
+                  {wireNonceHex}
                 </div>
-              </>
-            ) : (
-              <>
-                <AlertOctagon className="w-5 h-5 text-rose-400 shrink-0" />
-                <div>
-                  <div className="font-bold uppercase tracking-wider text-[11px]">CRYPTOGRAPHIC VERIFICATION FAILED</div>
-                  <div className="text-rose-300/80 mt-0.5 text-xs">
-                    AES-GCM GHASH evaluation failed. The receiver safely rejected the tampered packet and discarded all in-flight bytes.
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </Card>
-      )}
+              </div>
 
-      {/* Event Stream */}
-      <EventLog logs={logs} onClear={() => setLogs([])} />
+              <div>
+                <span className="text-[#5f6670] uppercase font-semibold text-[9px] block">Wire AAD Header:</span>
+                <div
+                  className={`p-1 rounded-[2px] font-mono truncate ${
+                    activeTamperMode === 'aad'
+                      ? 'bg-rose-950/40 border border-rose-700 text-rose-300 font-bold'
+                      : 'bg-[#090b0e] border border-[#20252b] text-amber-300'
+                  }`}
+                >
+                  {wireAad}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[#5f6670] uppercase font-semibold text-[9px] block">Wire Ciphertext:</span>
+                <div
+                  className={`p-1 rounded-[2px] font-mono truncate ${
+                    activeTamperMode === 'ciphertext'
+                      ? 'bg-rose-950/40 border border-rose-700 text-rose-300 font-bold'
+                      : 'bg-[#090b0e] border border-[#20252b] text-[#e6e7e9]'
+                  }`}
+                >
+                  {wireCiphertext}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[#5f6670] uppercase font-semibold text-[9px] block">128-bit GHASH Tag:</span>
+                <div className="p-1 rounded-[2px] bg-[#090b0e] border border-[#20252b] font-mono text-emerald-400 truncate font-bold">
+                  {wireTag}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Receiver Cryptographic Decision */}
+          {receiverResult && (
+            <div
+              className={`p-2.5 rounded-[2px] border font-mono text-xs ${
+                receiverResult.success
+                  ? 'bg-[#081510] border-emerald-900/80 text-emerald-300'
+                  : 'bg-rose-950/30 border-rose-700 text-rose-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                {receiverResult.success ? (
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                )}
+                <div>
+                  <span className="font-bold tracking-wider uppercase text-[11px] block">
+                    {receiverResult.success
+                      ? 'AUTHENTICATION VERIFIED — PLAINTEXT RELEASED'
+                      : 'AUTHENTICATION FAILED — PLAINTEXT NOT RELEASED'}
+                  </span>
+                  <span className="text-[10px] text-slate-300 block mt-0.5 leading-relaxed">
+                    {receiverResult.success
+                      ? `Recovered Payload: "${receiverResult.plaintext}"`
+                      : 'Cryptographic Boundary Enforcement: GHASH authentication tag check failed on tampered packet. Plaintext safely discarded.'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Inspector & Observation */}
+        <div className="space-y-4 min-w-0">
+          <CryptoInspector
+            title="WIRE PACKET INSPECTOR"
+            protocol="AES-256-GCM AEAD"
+            sections={[
+              {
+                id: 'transit',
+                title: 'WIRE PACKET PARAMETERS',
+                fields: [
+                  { id: 'iv', label: 'Nonce (IV)', value: wireNonceHex, tag: '96 BITS', copyable: true },
+                  { id: 'tag', label: 'GHASH Tag', value: wireTag, tag: '128 BITS', copyable: true },
+                  { id: 'aad', label: 'Wire AAD', value: wireAad, copyable: true },
+                  { id: 'ct', label: 'Ciphertext', value: wireCiphertext ? `${wireCiphertext.substring(0, 20)}...` : '—', copyable: true }
+                ]
+              }
+            ]}
+          />
+
+          <AttackerView
+            title="NETWORK OBSERVATION"
+            threatModel="Active Man-in-the-Middle wire interception"
+            tampered={activeTamperMode !== 'none'}
+            tamperMessage={activeTamperMode !== 'none' ? `Attack Vector: ${activeTamperMode.toUpperCase()}` : undefined}
+            observable={[
+              { id: 'obs_iv', label: 'Transmitted IV', value: wireNonceHex },
+              { id: 'obs_aad', label: 'Transmitted AAD', value: wireAad },
+              { id: 'obs_ct', label: 'Transmitted CT', value: wireCiphertext ? wireCiphertext.substring(0, 20) + '...' : '' },
+              { id: 'obs_tag', label: 'Transmitted Tag', value: wireTag }
+            ]}
+            protectedItems={[
+              { id: 'prot_key', label: 'AES-256 Symmetric Key' },
+              { id: 'prot_plain', label: 'Confidential Plaintext' }
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* Bottom Full-Width Section: Real Event Protocol Trace */}
+      <div className="mt-4">
+        <ProtocolTrace
+          title="TAMPERING STUDIO EXECUTION TRACE"
+          events={events}
+          onClear={() => setEvents([])}
+        />
+      </div>
     </div>
   );
 };

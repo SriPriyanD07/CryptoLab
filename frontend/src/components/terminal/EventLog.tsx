@@ -16,16 +16,16 @@ interface EventLogProps {
 
 export const EventLog: React.FC<EventLogProps> = ({ logs, onClear }) => {
   return (
-    <div className="bg-slate-950 border border-slate-800/90 rounded font-mono text-[11px] p-3 mt-4">
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2 text-slate-400">
+    <div className="bg-[#0d1014] border border-[#20252b] rounded-[2px] font-mono text-[11px] p-2.5 mt-3">
+      <div className="flex items-center justify-between border-b border-[#20252b] pb-1.5 mb-2 text-[#8b929a]">
         <div className="flex items-center space-x-2">
-          <Terminal className="w-3.5 h-3.5 text-sky-400" />
-          <span className="font-semibold uppercase tracking-wider text-slate-300">Protocol Event Stream</span>
-          <span className="text-slate-500">({logs.length} events)</span>
+          <Terminal className="w-3.5 h-3.5 text-[#8b929a]" />
+          <span className="font-semibold uppercase tracking-wider text-[#e6e7e9] text-[10px]">Protocol Event Stream</span>
+          <span className="text-[#5f6670] text-[10px]">({logs.length} events)</span>
         </div>
         <button
           onClick={onClear}
-          className="text-slate-500 hover:text-slate-300 flex items-center space-x-1 transition-colors text-[10px]"
+          className="text-[#8b929a] hover:text-[#e6e7e9] flex items-center space-x-1 transition-colors text-[10px] px-1.5 py-0.5 rounded-[2px] border border-[#20252b] bg-[#11151a]"
           title="Clear log"
         >
           <Trash2 className="w-3 h-3" />
@@ -33,9 +33,9 @@ export const EventLog: React.FC<EventLogProps> = ({ logs, onClear }) => {
         </button>
       </div>
 
-      <div className="max-h-40 overflow-y-auto space-y-1 pr-1 font-mono">
+      <div className="max-h-40 overflow-y-auto space-y-1 pr-1 font-mono text-[10px]">
         {logs.length === 0 ? (
-          <div className="text-slate-600 italic py-1">No protocol operations logged yet.</div>
+          <div className="text-[#5f6670] italic py-1">No protocol operations logged yet.</div>
         ) : (
           logs.map((log) => {
             const colorClass =
@@ -45,12 +45,12 @@ export const EventLog: React.FC<EventLogProps> = ({ logs, onClear }) => {
                 ? 'text-amber-400'
                 : log.type === 'success'
                 ? 'text-emerald-400'
-                : 'text-slate-300';
+                : 'text-[#e6e7e9]';
 
             return (
               <div key={log.id} className="flex items-start space-x-2 leading-relaxed">
-                <span className="text-slate-500 shrink-0">{log.timestamp}</span>
-                <span className="text-sky-400/90 shrink-0">[{log.source}]</span>
+                <span className="text-[#5f6670] shrink-0">{log.timestamp}</span>
+                <span className="text-[#cbd5e1] shrink-0 font-medium">[{log.source}]</span>
                 <span className={colorClass}>{log.message}</span>
               </div>
             );

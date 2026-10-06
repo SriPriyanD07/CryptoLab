@@ -1,208 +1,267 @@
-# CryptoLab — Interactive Cryptography Laboratory
+# CryptoLab
 
-[![React](https://img.shields.io/badge/React-19.0-61dafb?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-8.3-646cff?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4.0-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Web Crypto API](https://img.shields.io/badge/Web_Crypto_API-SubtleCrypto-4f46e5?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
-[![Python](https://img.shields.io/badge/Python-3.10+-3776ab?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![Pytest](https://img.shields.io/badge/Tests-24%2F24%20Passed-brightgreen?style=flat-square&logo=pytest&logoColor=white)](https://docs.pytest.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+### Interactive Cryptography Laboratory & Research Workstation
 
-> **CryptoLab** is an interactive, technical laboratory workbench engineered for security professionals, cryptography engineers, and researchers. Experiment directly with cryptographic primitives, inspect internal mathematical states and unencrypted wire frames, and observe cryptographic invariants and failure modes under active adversary attack.
+CryptoLab is an interactive laboratory and research workstation environment engineered for experimenting with and understanding cryptographic primitives, key agreement, authenticated encryption, digital signatures, and protocol-level security behavior.
+
+CryptoLab is designed as a hands-on technical workbench where security engineers, researchers, and students can observe intermediate mathematical states, inspect transmitted wire parameters, simulate in-flight tampering, and analyze cryptographic failure conditions under active adversary models.
 
 ---
 
-## 🔬 Core Product Philosophy
+## Overview
 
-CryptoLab is **not** an online textbook, a generic admin dashboard, or a chatbot. It is a **hands-on security engineering workbench** founded on an interactive empirical feedback loop:
+Modern cryptographic protocols rely on the composition of distinct mathematical and algorithmic primitives. While individual algorithms (such as block ciphers, hash functions, and elliptic curve operations) are well-defined, understanding their composition, state transitions, failure invariants, and wire exposure is essential for rigorous security engineering.
 
-$$\text{Input} \longrightarrow \text{Cryptographic Operation} \longrightarrow \text{Internal State Inspection} \longrightarrow \text{Wire Frame Observation} \longrightarrow \text{Adversary Tampering / Verification}$$
-
-Every module allows users to **execute**, **inspect**, **mutate**, and **break** cryptographic constructions in real time.
-
----
-
-## 🏗️ Architecture & Dual-Engine Design
-
-CryptoLab is built on a high-precision dual-engine architecture:
-
-```
-                                  ┌────────────────────────────────────────────────────────┐
-                                  │                  CryptoLab Architecture                │
-                                  └────────────────────────────────────────────────────────┘
-                                                              │
-                    ┌─────────────────────────────────────────┴─────────────────────────────────────────┐
-                    ▼                                                                                   ▼
-   ┌─────────────────────────────────┐                                                 ┌─────────────────────────────────┐
-   │     Frontend Research Suite     │                                                 │    Backend Reference Engine     │
-   │  (React 19 + TypeScript + Vite) │                                                 │     (Python 3.13 + PyCA)        │
-   ├─────────────────────────────────┤                                                 ├─────────────────────────────────┤
-   │ • Web Crypto API (SubtleCrypto) │                                                 │ • OpenSSL FIPS-compliant backend │
-   │ • Custom BigInt Modular Engine  │                                                 │ • PyCA `cryptography` library   │
-   │ • Real-time bit-level mutators  │                                                 │ • 24 Automated Pytest Suite     │
-   │ • Wire protocol event stream    │                                                 │ • Full edge-case verification   │
-   └─────────────────────────────────┘                                                 └─────────────────────────────────┘
-```
-
-1. **Client-Side High-Throughput Laboratory**:
-   - **Hardware-Accelerated Web Crypto API**: Native `SubtleCrypto` execution for AES-256-GCM, ECDH (NIST P-256), ECDSA (SECP256R1 / SHA-256), and SHA-256.
-   - **Arbitrary-Precision BigInt Engine**: Custom, dependency-free implementations of Euclidean division, Bézout coefficients, modular multiplicative inverse, and Square-and-Multiply binary exponentiation.
-   - **Wire Protocol Visualizer**: Dedicated terminal event logs capturing frames transmitted between endpoints.
-
-2. **Backend Reference Implementation**:
-   - Python reference implementation in `crypto/` and `simulations/` leveraging standard **PyCA `cryptography`**.
-   - Comprehensive test suite in `tests/` verifying mathematical parity, RFC specifications, and attack rejections.
+CryptoLab provides an interactive workstation interface where users can:
+- **Experiment with algorithms**: Directly execute classical and modern cryptographic constructions with user-supplied inputs and parameters.
+- **Inspect intermediate cryptographic state**: Examine internal values (e.g. Bézout coefficients, intermediate square-and-multiply states, elliptic curve coordinates, uncompressed public points, and HKDF PRK/OKM steps).
+- **Observe protocol flows**: Trace multi-party message exchanges across initiator, recipient, and untrusted network wire boundaries.
+- **Inspect transmitted information**: Contrast sensitive local secrets against parameters visible to an eavesdropper on a public channel.
+- **Simulate active tampering**: Intentionally mutate ciphertext bits, forge cleartext associated data (AAD), or corrupt initialization vectors in transit.
+- **Observe authentication failures**: Inspect why authenticated encryption schemes reject tampered frames prior to releasing unauthenticated plaintext.
+- **Understand composition relationships**: Observe how raw key agreement (ECDH) feeds into pseudorandom key derivation (HKDF) to establish authenticated transport sessions (AES-GCM).
 
 ---
 
-## 🧪 Interactive Laboratory Workbenches
+## Features
 
-CryptoLab is organized into 10 dedicated workbenches:
+CryptoLab contains 9 dedicated laboratory workbenches covering foundational mathematics, asymmetric key agreement, digital signatures, hashing, authenticated encryption, and full transport pipelines:
 
-### 00. Architecture Overview & Primitive Registry
-- Real-time diagnostic telemetry: Web Crypto API availability, user agent security flags, and crypto hardware capabilities.
-- Structural registry classifying primitives into **Foundations**, **Symmetric Cryptography**, **Asymmetric Cryptography**, **Signatures**, and **Protocols**.
+### Modular Arithmetic
+* **Residue Operations**: Basic finite ring arithmetic over $\mathbb{Z}_n$ ($a \pm b \pmod n$, $a \cdot b \pmod n$, $a^b \pmod n$).
+* **Euclidean Algorithm**: Greatest Common Divisor ($\gcd(a, b)$) calculation via Euclidean division.
+* **Extended Euclidean Algorithm**: Derivation of Bézout coefficients $x, y$ satisfying $a \cdot x + b \cdot y = \gcd(a, b)$.
+* **Modular Multiplicative Inverse**: Verification and derivation of $a^{-1} \pmod n$, highlighting the coprimality condition $\gcd(a, n) = 1$.
+* **Square-and-Multiply Exponentiation Trace**: Step-by-step binary exponent scan demonstrating intermediate squaring and conditional multiplication operations with pre- and post-state tracking.
 
-### 01. Modular Arithmetic & Finite Fields ($\mathbb{Z}_n$)
-- **Core Operations**: Addition, subtraction, multiplication, and modular exponentiation over arbitrary integers ($a \pm b \pmod n$, $a \cdot b \pmod n$, $a^b \pmod n$).
-- **Euclidean Division Trace**: Step-by-step trace showing quotients, remainders, and Bézout identity verification:
-  $$a \cdot x + b \cdot y = \gcd(a, b)$$
-- **Modular Inverses**: Compute $a^{-1} \pmod n$ using the Extended Euclidean Algorithm, highlighting coprime requirements ($\gcd(a, n) = 1$).
-- **Square-and-Multiply Trace**: Real-time bit-by-bit execution trace showing binary exponent scanning, intermediate square operations, and conditional multiply steps.
+### RSA Cryptosystem
+* **Educational RSA Mathematics**: Asymmetric trapdoor permutation based on the integer factorization problem and Euler's totient function $\phi(n) = (p-1)(q-1)$.
+* **Key Generation Concepts**: Selection of prime factors $(p, q)$, modulus $n = p \cdot q$, public exponent $e$, and private trapdoor exponent $d \equiv e^{-1} \pmod{\phi(n)}$.
+* **Numerical & Text Encryption**: Demonstration of raw textbook RSA transformations ($c = m^e \pmod n$, $m = c^d \pmod n$) alongside character-encoded string encryption.
+* **Production Deployment Note**: Educational RSA deliberately exposes textbook mathematics for transparency. Production RSA requires standardized padding schemes (such as RSA-OAEP for encryption or RSA-PSS for signatures) and key sizes of 2048 bits or higher to prevent algebraic and chosen-ciphertext attacks.
 
-### 02. Diffie-Hellman Key Exchange (FFDH)
-- **Parameter Negotiation**: Select prime modulus $p$ and generator $g$ with group validation.
-- **Key Derivation**: Endpoint private exponent generation ($a, b$) and public key computation ($A = g^a \pmod p$, $B = g^b \pmod p$).
-- **Shared Secret Equality**: Independent derivation verifying:
-  $$S = B^a \pmod p = A^b \pmod p = g^{ab} \pmod p$$
-- **Private State vs Wire Separation**: Explicitly juxtaposes what Alice and Bob know privately vs what an eavesdropper intercepts off the public wire ($p, g, A, B$).
+### Diffie-Hellman Key Agreement (FFDH)
+* **Finite-Field Key Negotiation**: Symmetric key negotiation over unencrypted channels via discrete logarithm hardness in a cyclic group (RFC 3526).
+* **Public & Private Parameters**: Negotiation of prime modulus $p$ and generator $g$, private exponents $a$ and $b$, and public values $A = g^a \pmod p$ and $B = g^b \pmod p$.
+* **Shared Secret Derivation**: Verification of shared secret convergence $S = B^a \pmod p = A^b \pmod p = g^{ab} \pmod p$.
+* **Wire Protocol & Attacker Perspective**: Visual separation of local confidential state (private exponents) versus values exposed on the wire ($p, g, A, B$) observable by a passive sniffer.
 
-### 03. RSA Cryptosystem
-- **Parameter Generation**: Select prime pairs $(p, q)$ to compute modulus $n = p \cdot q$ and Euler's totient $\phi(n) = (p-1)(q-1)$.
-- **Trapdoor Permutation**: Select public exponent $e$ ($\gcd(e, \phi(n)) = 1$) and derive private exponent $d \equiv e^{-1} \pmod{\phi(n)}$.
-- **Text & Numerical Cipher**: Perform modular exponentiation encryption $c = m^e \pmod n$ and decryption $m = c^d \pmod n$.
-- **Production Standard**: Export 2048-bit RSA-OAEP keys in standard PEM format.
+### Elliptic Curve Diffie-Hellman (ECDH)
+* **NIST P-256 (SECP256R1) Curve**: Key agreement over Weierstrass prime field curves.
+* **Public Key Exchange**: Ephemeral private scalar generation ($d_A, d_B$) and point scalar multiplication ($Q_A = d_A \cdot G$, $Q_B = d_B \cdot G$) yielding raw 65-byte uncompressed points (`04 || X || Y`).
+* **Shared Secret Derivation**: Convergence on identical 256-bit curve points $S = d_A \cdot Q_B = d_B \cdot Q_A$.
+* **HKDF-SHA256 Session Keying**: Extraction and expansion of the raw shared $X$-coordinate into a cryptographically strong 256-bit symmetric session key.
+* **3D Convergence Visualization**: Spatial representation of dual scalar multiplication converging to a unified point.
 
-### 04. Elliptic Curve Diffie-Hellman (ECDH)
-- **Curve Selection**: Implements **NIST P-256 (SECP256R1)**.
-- **Point Multiplication**: Private scalar generation $d$ and point multiplication $Q = d \cdot G$ yielding raw 65-byte uncompressed public points ($0x04 \parallel X \parallel Y$).
-- **Raw Secret to Session Key**: Extracts the 256-bit raw $X$-coordinate shared secret point and feeds it through **HKDF-SHA256** to derive a symmetric key.
-- **Comparative Analysis**: Live benchmarking comparing Classical FFDH (2048-bit) against ECDH P-256 (256-bit) in key size, bandwidth, and computational overhead.
+### ECDSA Digital Signatures
+* **Asymmetric Non-Repudiation**: Digital signature generation and verification using NIST P-256 and SHA-256 (FIPS 186-4).
+* **Signing & Verification Pipeline**: Message digest hashing, private scalar signing generating $(r, s)$ signature pairs, and mathematical verification against signer public key.
+* **Message Tampering Testbed**: Real-time payload mutation demonstrating immediate signature verification failure upon any single-character alteration.
+* **Important Cryptographic Distinction**: **ECDSA provides digital signatures and authentication.** It does **not** encrypt messages or provide confidentiality.
 
-### 05. ECDSA Digital Signatures
-- **Asymmetric Integrity**: Sign arbitrary message payloads using private EC keys over SECP256R1 with SHA-256.
-- **ASN.1 DER Export**: Real-time generation and hex inspection of standard ASN.1 DER $(r, s)$ signature envelopes.
-- **Live Signature Verification**: Cryptographic validation with public key verification.
-- **Tampering Testbed**: Modify payload characters in real time to observe instant mathematical signature rejection.
+### SHA-256 Cryptographic Hash & Avalanche
+* **One-Way Digest Generation**: Deterministic 256-bit output computation via Merkle–Damgård compression (FIPS 180-4).
+* **Avalanche Effect Analysis**: Side-by-side comparison of baseline input $A$ versus modified input $B$ (e.g. single-character or single-bit variations).
+* **Bit Diffusion Metrics**: Real-time Hamming distance calculation and percentage of inverted output bits ($\approx 50\%$ under the Strict Avalanche Criterion).
+* **256-Bit Stream Difference Map**: Cell-by-cell visual alignment map displaying exactly which bits flipped between digests.
+* **Important Cryptographic Distinction**: **SHA-256 is a one-way cryptographic hash function.** It is **not** encryption and cannot be decrypted.
 
-### 06. SHA-256 & Avalanche Effect
-- **Cryptographic Diffusion**: Side-by-side comparison of Input A vs Input B.
-- **Hamming Distance Calculator**: Exact bitwise comparison of the 256-bit hash outputs.
-- **Binary Difference Grid**: 256-cell visual alignment map highlighting exactly which bits flipped, proving that a 1-bit input variation flips $\approx 50\%$ of the output bits.
-
-### 07. AES-256-GCM (Authenticated Encryption)
-- **AEAD Construction**: Galois/Counter Mode providing both confidentiality (CTR mode) and authenticity/integrity (GHASH).
-- **Three-Part Decomposition**: Explicit separation of:
-  - **256-bit Secret Key** ($K$)
-  - **96-bit Public Nonce** ($IV$) — *never reuse with the same key!*
-  - **128-bit Authentication Tag** ($T$)
-- **Associated Data (AAD)**: Encrypt payloads with cleartext headers authenticated under the tag.
-- **Nonce Reuse Catastrophe**: Interactive simulation showing how reusing a nonce across two plaintexts leaks the XOR difference:
+### AES-256-GCM Authenticated Encryption
+* **Authenticated Encryption with Associated Data (AEAD)**: Simultaneous confidentiality via CTR-mode stream encryption and integrity/authenticity via 128-bit GHASH polynomial evaluation (NIST SP 800-38D).
+* **Payload & Metadata Decomposition**: Explicit handling of 256-bit symmetric key, unique 96-bit initialization vector (nonce), ciphertext, and authenticated associated data (AAD).
+* **Integrity Verification & Rejection**: Real-time simulation demonstrating that ciphertext bit flips or AAD header alterations result in immediate authentication rejection.
+* **Nonce-Reuse Catastrophe Demonstration**: Educational simulation illustrating how reusing a nonce under the same key completely destroys GHASH authenticity and leaks plaintext XOR differences:
   $$C_1 \oplus C_2 = P_1 \oplus P_2$$
+* **Important Cryptographic Distinction**: **AES-GCM provides authenticated encryption.** Unauthenticated ciphers (e.g. raw CBC without HMAC) do not protect against malleability or active modification.
 
-### 08. Secure Channel Protocol (Flagship Demo)
-- **End-to-End Modern Pipeline**: Complete TLS-like session integration:
-  $$\text{Ephemeral ECDH (P-256)} \longrightarrow \text{HKDF-SHA256} \longrightarrow \text{AES-256-GCM}$$
-- **Protocol Simulation**: Full interactive message exchange between **Alice**, the **Physical Network Wire**, and **Bob**.
-- **Wire Interception**: Toggle eavesdropping and packet inspection to view raw transit frames:
-  ```json
-  {
-    "ephemeral_public_key": "04a1f8...",
-    "nonce": "3f9c...",
-    "aad": "Protocol: CryptoLab-v1.0 | Sender: Alice",
-    "ciphertext": "8e41...",
-    "tag": "d92a..."
-  }
-  ```
-- **In-Transit Attack Toggle**: Simulate active man-in-the-middle bit flipping before delivery to Bob, observing Bob's immediate cryptographic rejection.
+### Secure Channel Protocol Pipeline
+* **End-to-End Modern Transport Pipeline**: Integration of individual primitives into a unified, TLS-like communication architecture:
+  $$\text{Ephemeral ECDH (P-256)} \longrightarrow \text{HKDF-SHA256} \longrightarrow \text{AES-256-GCM} \longrightarrow \text{Authenticated Transport}$$
+* **State Machine & Wire Transit**: Multi-stage handshake tracking initiator keypair generation, public key exchange over the wire, recipient key derivation, and AEAD encrypted transmission.
+* **Interception & Tampering Experiments**: Allows active in-flight injection of bit flips or header alterations to observe end-to-end transport failure.
 
-### 09. Active Tampering & Man-in-the-Middle Attack Studio
-- **Dedicated Adversary Workbench**: Intercept packets in-flight and execute three attack vectors:
-  1. **Ciphertext Bit-Flipping**: Flip bits at user-defined byte offsets.
-  2. **Cleartext AAD Header Forging**: Mutate unencrypted metadata headers (e.g. routing commands or clearance levels).
-  3. **Tag Corruption**: Invalidate the 128-bit GHASH authentication tag.
-- **Mathematical Defense Verification**: Demonstrates why recipients reject tampered frames **prior** to exposing unauthenticated plaintext, eliminating padding oracle and malleable ciphertext vulnerabilities.
+### Tampering Studio & Active Adversary Simulation
+* **Active Dolev-Yao Adversary Testbed**: Intercept transmitted wire frames in a simulated hostile transport channel.
+* **Mutation Vectors**:
+  - **Ciphertext Modification**: Invert specific ciphertext bits to observe authentication rejection.
+  - **AAD Header Forgery**: Mutate cleartext routing metadata or clearance headers.
+  - **Nonce/IV Corruption**: Corrupt initialization vector bits.
+* **Plaintext Release Blocking**: Illustrates the fundamental AEAD security contract: when authentication fails, the receiver drops the payload and blocks plaintext release entirely.
 
 ---
 
-## 📂 Project Structure
+## Research Workstation Interface
+
+The workstation user interface is organized into a cohesive, graphite-themed security research environment with dedicated visual primitives:
+
+* **3D Cryptographic Architecture (Overview)**: First-class isometric visualization displaying the 6-layer dependency stack ($L_0$ Algebraic Foundations $\to L_5$ Secure Transport) floating directly in the workspace with interactive Z-depth layer selection and pointer parallax.
+* **3D Protocol Convergence (ECDH)**: Spatial depth stage showing initiator/recipient scalar multiplication and shared secret point convergence.
+* **3D Packet Transport Channel (Secure Channel)**: Horizontal perspective corridor tracking in-transit AEAD frames between transmitter enclave and receiver boundary.
+* **3D Active Adversary Rig (Tampering Studio)**: Spatial interception tap displaying real-time wire mutation and receiver GHASH evaluation.
+* **Cryptographic Status Rail**: Persistent invariant badges displaying algorithm status, parameter coprimality, and handshake progression.
+* **CryptoInspector**: Technical parameter drawer detailing key sizes, curves, hexadecimal representations, and confidentiality status.
+* **Attacker View (Wire Sniffer)**: Explicitly delineates observable wire parameters versus confidential local endpoint state.
+* **Protocol Trace**: Monospace audit log tracking timestamped cryptographic events with execution status.
+
+---
+
+## Architecture
+
+The project maintains a clean separation between the interactive frontend workstation and reference backend cryptographic engines:
 
 ```
 CryptoLab/
-├── frontend/                               # React + TypeScript Web Laboratory
+├── crypto/                         # Python reference cryptographic implementations
+│   ├── mod_math.py                 # Extended Euclidean, GCD, modular inverse
+│   ├── rsa_lab.py                  # Educational RSA & 2048-bit OAEP
+│   ├── dh_lab.py                   # Classical FFDH & RFC 3526 MODP
+│   ├── ecdh_lab.py                 # NIST P-256 key agreement & HKDF derivation
+│   ├── ecdsa_lab.py                # SECP256R1 signing & verification
+│   ├── hash_lab.py                 # SHA-256 hashing & avalanche metrics
+│   └── aes_lab.py                  # AES-256-GCM & nonce reuse analysis
+├── simulations/                    # Python protocol simulations
+│   └── secure_channel.py           # End-to-end secure channel pipeline simulation
+├── tests/                          # Automated Pytest test suite (24 unit tests)
+│   ├── test_mod_math.py            # Finite field arithmetic tests
+│   ├── test_rsa.py                 # RSA mathematical & OAEP tests
+│   ├── test_dh.py                  # Diffie-Hellman exchange tests
+│   ├── test_ecdh.py                # ECDH shared secret tests
+│   ├── test_ecdsa.py               # ECDSA signature verification tests
+│   ├── test_hash.py                # SHA-256 determinism & avalanche tests
+│   ├── test_aes.py                 # AES-GCM encryption & tampering tests
+│   └── test_secure_channel.py      # End-to-end transport & MitM tests
+├── frontend/                       # Interactive React + TypeScript workstation
 │   ├── src/
-│   │   ├── components/                     # Reusable laboratory UI primitives
-│   │   │   ├── layout/                     # Sidebar, TopBar
-│   │   │   ├── terminal/                   # EventLog monospace protocol stream
-│   │   │   └── ui/                         # Card, Badge, CodeBlock
-│   │   ├── features/                       # Interactive Cryptography Workbenches
-│   │   │   ├── overview/                   # 00. Architecture Overview
-│   │   │   ├── modularArithmetic/          # 01. Modular Arithmetic & Euclidean Traces
-│   │   │   ├── diffieHellman/              # 02. Classical Diffie-Hellman Exchange
-│   │   │   ├── rsa/                        # 03. RSA Keygen, ModPow & RSA-OAEP
-│   │   │   ├── ecdh/                       # 04. ECDH (P-256) & HKDF Key Derivation
-│   │   │   ├── ecdsa/                      # 05. ECDSA Signatures & Verification
-│   │   │   ├── sha256/                     # 06. SHA-256 Avalanche Analysis
-│   │   │   ├── aesGcm/                     # 07. AES-256-GCM & Nonce Reuse
-│   │   │   ├── secureChannel/              # 08. Flagship Secure Channel Protocol
-│   │   │   └── tampering/                  # 09. Active Adversary MitM Attack Studio
-│   │   ├── lib/crypto/                     # Cryptographic engines
-│   │   │   ├── modMath.ts                  # BigInt arithmetic, GCD, ModPow, Inverse
-│   │   │   ├── rsa.ts                      # Educational RSA mathematical model
-│   │   │   ├── diffieHellman.ts            # Client-side DH state machine
-│   │   │   └── webCrypto.ts                # Web Crypto API wrapper (AES-GCM, ECDH, ECDSA)
-│   │   ├── App.tsx                         # Core laboratory workbench shell
-│   │   ├── main.tsx                        # Application mount
-│   │   └── index.css                       # Technical dark theme styling
-│   ├── package.json                        # Dependencies and scripts
-│   ├── tsconfig.json                       # Strict TypeScript configuration
-│   └── vite.config.ts                      # Vite build configuration
-├── crypto/                                 # Python reference implementation (PyCA)
-│   ├── mod_math.py                         # Extended Euclidean, ModPow, GCD
-│   ├── rsa_lab.py                          # RSA educational & 2048-bit OAEP
-│   ├── dh_lab.py                           # Classical FFDH & RFC 3526 MODP
-│   ├── ecdh_lab.py                         # NIST P-256 & HKDF derivation
-│   ├── ecdsa_lab.py                        # SECP256R1 signing & DER export
-│   ├── aes_lab.py                          # AES-256-GCM AEAD & nonce catastrophe
-│   └── hash_lab.py                         # SHA-256 & bitwise avalanche analysis
-├── simulations/                            # Python secure channel simulation
-│   └── secure_channel.py                   # Alice <-> Wire <-> Bob simulator
-├── tests/                                  # Comprehensive automated test suite
-│   ├── test_mod_math.py                    # Modular arithmetic verification
-│   ├── test_rsa.py                         # RSA mathematical & OAEP tests
-│   ├── test_dh.py                          # Diffie-Hellman exchange tests
-│   ├── test_ecdh.py                        # ECDH shared secret tests
-│   ├── test_ecdsa.py                       # ECDSA signature verification tests
-│   ├── test_hash.py                        # SHA-256 & avalanche tests
-│   ├── test_aes.py                         # AES-GCM & nonce reuse tests
-│   └── test_secure_channel.py              # End-to-end protocol & attack tests
-├── .gitignore                              # Git exclusion rules
-├── requirements.txt                        # Python dependencies
-└── README.md                               # Project documentation
+│   │   ├── components/             # Reusable workstation UI & visualization primitives
+│   │   │   ├── layout/             # Sidebar, TopBar
+│   │   │   ├── terminal/           # ProtocolTrace & EventLog audit streams
+│   │   │   ├── ui/                 # Card, Badge, CodeBlock
+│   │   │   ├── visualization/      # 3D spatial rigs (Architecture, ECDH, Channel, Attack)
+│   │   │   └── workstation/        # SecurityStatus, CryptoInspector, AttackerView
+│   │   ├── features/               # Dedicated laboratory workbenches
+│   │   │   ├── overview/           # 3D architecture & module registry
+│   │   │   ├── modularArithmetic/  # Residue operations & Euclidean traces
+│   │   │   ├── rsa/                # Asymmetric factorization & trapdoors
+│   │   │   ├── diffieHellman/      # Discrete log key exchange
+│   │   │   ├── ecdh/               # P-256 point multiplication & convergence
+│   │   │   ├── ecdsa/              # Digital signatures & verification
+│   │   │   ├── sha256/             # Cryptographic hash & diffusion
+│   │   │   ├── aesGcm/             # Authenticated encryption & nonce reuse
+│   │   │   ├── secureChannel/      # End-to-end pipeline simulation
+│   │   │   └── tampering/          # Active adversary mutation studio
+│   │   ├── lib/crypto/             # Client-side cryptographic engines
+│   │   │   ├── modMath.ts          # Arbitrary-precision BigInt arithmetic
+│   │   │   ├── rsa.ts              # Mathematical RSA model
+│   │   │   ├── diffieHellman.ts    # FFDH state machine
+│   │   │   └── webCrypto.ts        # Web Crypto API wrapper (SubtleCrypto)
+│   │   ├── App.tsx                 # Workstation shell & navigation
+│   │   ├── main.tsx                # React DOM entry point
+│   │   └── index.css               # Industrial workstation theme & 3D CSS
+│   ├── package.json                # Dependencies & npm scripts
+│   ├── tsconfig.json               # Strict TypeScript configuration
+│   └── vite.config.ts              # Vite bundling configuration
+├── app.py                          # Streamlit application entry point
+├── requirements.txt                # Python backend dependencies
+├── .gitignore                      # Git exclusion rules
+└── README.md                       # Workstation documentation
+```
+
+### Cryptographic Separation of Concerns
+
+* **Frontend Workstation**: Runs standard, hardware-accelerated **Web Crypto API (`window.crypto.subtle`)** for NIST P-256 ECDH, ECDSA signatures, AES-256-GCM, and SHA-256. Foundational ring arithmetic and educational RSA utilize a custom, zero-dependency **BigInt** engine.
+* **Python Engine**: Provides reference implementations utilizing **PyCA `cryptography`** backed by OpenSSL, along with a standalone simulation engine in `simulations/`.
+* **Automated Tests**: Pytest suite validates all mathematical operations, RFC specifications, attack rejections, and failure conditions.
+
+---
+
+## Cryptographic Model & Primitive Composition
+
+### Primitive Roles
+
+```
+RSA               ───>  Public-Key Cryptography (Trapdoor Permutation)
+DH / ECDH         ───>  Key Agreement (Shared Secret Negotiation)
+HKDF              ───>  Key Derivation (Pseudorandom Session Keying)
+AES-GCM           ───>  Authenticated Encryption with Associated Data (AEAD)
+SHA-256           ───>  Cryptographic Hash Function (One-Way Digest)
+ECDSA             ───>  Digital Signatures (Non-Repudiation & Authenticity)
+```
+
+### Secure Channel Composition Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Initiator (Alice)                        │
+└─────────────────────────────────────────────────────────────┘
+                               │
+               [Ephemeral P-256 Keypair]
+                               │
+            Raw Public Point Q_A over the wire
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Key Agreement (ECDH)                     │
+│                  S = d_A · Q_B = d_B · Q_A                  │
+└─────────────────────────────────────────────────────────────┘
+                               │
+                      Raw Shared Secret S
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Key Derivation (HKDF-SHA256)                │
+│             K = HKDF-Expand(HKDF-Extract(S))                │
+└─────────────────────────────────────────────────────────────┘
+                               │
+                  256-bit Symmetric Session Key K
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│             Authenticated Encryption (AES-GCM)              │
+│       Ciphertext, Nonce, 128-bit GHASH Tag, Header AAD      │
+└─────────────────────────────────────────────────────────────┘
+                               │
+                 Transmitted over Network Wire
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Recipient (Bob)                          │
+│               GHASH Tag Match Verification                  │
+│             Success: Plaintext Delivered                    │
+│             Failure: Immediate Abort & Drop                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Quickstart & Installation
+## Security Experiments
 
-### Prerequisites
-- **Node.js**: v18.0+ (v20+ recommended)
-- **Python**: v3.10+ (for backend test suite)
+CryptoLab allows researchers and engineers to empirically observe:
+* **Wire Visibility**: Exactly which parameters are exposed on an untrusted network wire (e.g. public keys, nonces, cleartext AAD headers, ciphertexts, and authentication tags) versus what remains confidential to endpoints (private keys, raw shared secrets, symmetric session keys, and plaintexts).
+* **Ciphertext Bit Flipping**: How modifying even a single bit in an encrypted payload causes GHASH polynomial verification to fail and prevents plaintext delivery.
+* **AAD Header Tampering**: How altering unencrypted associated metadata (such as routing IDs or permissions) invalidates the authentication tag despite the ciphertext remaining untouched.
+* **Nonce Integrity**: How modifying initialization vectors causes tag verification mismatch.
+* **Plaintext Release Prevention**: How recipient implementations that enforce authenticated encryption abort immediately upon tag mismatch, protecting downstream applications from unauthenticated data.
 
 ---
 
-### 1. Launch the React Workbench (Frontend)
+## Tech Stack
+
+| Component | Technology | Version | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Frontend Framework** | React | `^19.2.8` | Component-based workstation interface |
+| **Language** | TypeScript | `~6.0.2` | Strict type safety and cryptographic parameter modeling |
+| **Build Tool** | Vite | `^8.3.0` | Ultra-fast client compilation and development server |
+| **Styling** | Tailwind CSS | `^4.3.3` | Industrial graphite theme, layout grids, and CSS 3D transforms |
+| **Icons** | Lucide React | `^1.52.0` | Monospace and technical interface iconography |
+| **Client Cryptography** | Web Crypto API | Standard | Native browser `SubtleCrypto` (AES-GCM, ECDH, ECDSA, SHA-256) |
+| **Mathematical Engine** | Native BigInt | Standard | Arbitrary-precision finite ring and textbook RSA operations |
+| **Backend Reference** | Python | `3.10+` / `3.13` | Reference cryptographic implementations and protocol simulations |
+| **Cryptographic Library** | PyCA `cryptography` | `>=42.0.0` | Standard OpenSSL-backed cryptographic algorithms |
+| **Test Framework** | Pytest | `>=7.4.0` | Automated cryptographic unit and regression tests |
+
+---
+
+## Run Locally
+
+### 1. Frontend Workstation
+
+Ensure **Node.js** (v18+ recommended) is installed.
 
 ```bash
 # Navigate to the frontend directory
@@ -211,55 +270,62 @@ cd frontend
 # Install dependencies
 npm install
 
-# Start the development server
+# Start the local development server
 npm run dev
 ```
 
-Open your browser and navigate to:
+Open your browser at:
 ```
 http://localhost:5173
 ```
 
-To create an optimized, type-checked production build:
-```bash
-npm run build
-npm run preview
-```
+### 2. Python Reference Environment
 
----
-
-### 2. Run the Backend Test Suite (Python)
+Ensure **Python** (v3.10+) is installed.
 
 ```bash
-# Return to repository root
-cd ..
-
-# Create and activate virtual environment
+# From the repository root, create a virtual environment
 python -m venv venv
 
-# Windows
-.\venv\Scripts\activate
-# Linux / macOS
+# Activate virtual environment
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# Linux / macOS:
 source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run all 24 unit tests
+# Run the automated test suite
 pytest tests/ -v
 ```
 
 ---
 
-## 🧪 Test Suite Verification Matrix
+## Build & Verification
 
-All 24 automated unit tests pass cleanly:
+### Production Frontend Build
+
+To execute type-checking and create an optimized production bundle:
+
+```bash
+cd frontend
+npm run build
+```
+
+Build status: **PASS (0 Errors, TypeScript `tsc -b` + Vite)**.
+
+### Cryptographic Test Suite Verification
+
+Run the automated Pytest suite from the repository root:
+
+```bash
+pytest tests/ -v
+```
+
+Verified test status: **24 / 24 tests passing (100%)**:
 
 ```
-============================= test session starts =============================
-platform win32 -- Python 3.13.0, pytest-9.1.1 -- plugins: anyio-4.15.1
-collected 24 items
-
 tests/test_aes.py::test_aes_gcm_encrypt_decrypt                    PASSED [  4%]
 tests/test_aes.py::test_aes_gcm_tampered_ciphertext_fails          PASSED [  8%]
 tests/test_aes.py::test_aes_gcm_tampered_aad_fails                 PASSED [ 12%]
@@ -285,27 +351,51 @@ tests/test_secure_channel.py::test_secure_channel_end_to_end       PASSED [ 91%]
 tests/test_secure_channel.py::test_tampered_ciphertext_rejection   PASSED [ 95%]
 tests/test_secure_channel.py::test_tampered_aad_rejection          PASSED [100%]
 
-======================= 24 passed, 1 warning in 22.10s ========================
+======================== 24 passed, 1 warning in 0.71s ========================
 ```
 
 ---
 
-## 🔒 Security Principles Demonstrated
+## Important Security Note
 
-1. **Authenticated Encryption (AEAD)**: Traditional unauthenticated ciphers (e.g. CBC without HMAC) are vulnerable to padding oracle attacks and bit-flipping malleability. AES-GCM guarantees that any modification to ciphertext or associated data causes total decryption failure.
-2. **Nonce Uniqueness**: Nonce reuse under AES-GCM completely compromises the GHASH authentication key and reveals plaintext differences ($C_1 \oplus C_2 = P_1 \oplus P_2$).
-3. **Forward Secrecy**: The secure channel protocol uses **ephemeral** ECDH keys per session. Compromise of long-term identity keys does not compromise past session traffic.
-4. **Separation of Concerns**: ECDH handles key agreement; ECDSA handles identity and authenticity; AES-256-GCM handles bulk payload encryption.
+**CryptoLab is an educational and research-oriented laboratory.**
+
+Certain modules intentionally utilize small or simplified parameters (such as small prime moduli in Diffie-Hellman and RSA, or unpadded textbook RSA exponentiation) so that internal mathematical behaviors, Bézout coefficients, and intermediate residues can be calculated and inspected interactively in real time.
+
+**These simplified demonstrations must NOT be used in production environments.**
+
+For production software:
+* Always use established, peer-reviewed cryptographic libraries (such as OpenSSL, BoringSSL, PyCA `cryptography`, or the Web Crypto API).
+* Use standardized protocols (such as TLS 1.3, SSHv2, or WireGuard) rather than custom protocol pipelines.
+* Use standardized parameter sizes (RSA $\ge 2048$ bits, NIST P-256 or Curve25519 for elliptic curves, AES-256 for symmetric encryption).
+* Always apply secure padding modes (e.g. RSA-OAEP for encryption, RSA-PSS for signatures).
+* Never reuse a nonce with the same key in authenticated encryption modes like AES-GCM.
+* Adhere to current cryptographic standards and guidance from NIST, BSI, and the IETF.
 
 ---
 
-## 📄 License
+## Project Status
+
+CryptoLab is an active experimental and research project. All 9 laboratory workbenches (Modular Arithmetic, RSA, Diffie-Hellman, ECDH, ECDSA, SHA-256, AES-256-GCM, Secure Channel, and Tampering Studio) are implemented, operational, and covered by automated test verification. The project is intended for research, education, and protocol experimentation and does not claim production deployment readiness.
+
+---
+
+## Development Principles
+
+* **Separation of Concerns**: Cryptographic algorithm implementations remain clean and decoupled from presentation and UI rendering code.
+* **Empirical Integrity**: Workstation visualizations and inspectors reflect actual cryptographic calculations and intermediate mathematical states, avoiding simulated or fictitious values.
+* **Automated Verification**: Test suites verify mathematical correctness, RFC compliance, and expected security failure behaviors on every release.
+* **Technically Defensible Claims**: Security documentation and workstation commentary maintain precise, technically accurate terminology without exaggerated security claims.
+
+---
+
+## License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 👤 Author
+## Author
 
 Developed by **[Sri Priyan D](https://github.com/SriPriyanD07)**.
-* Repository: [https://github.com/SriPriyanD07/CryptoLab](https://github.com/SriPriyanD07/CryptoLab)
+* GitHub Repository: [https://github.com/SriPriyanD07/CryptoLab](https://github.com/SriPriyanD07/CryptoLab)
